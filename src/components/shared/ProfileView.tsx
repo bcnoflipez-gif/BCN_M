@@ -14,7 +14,8 @@ import {
   Lock, 
   LogOut,
   Search,
-  Shield
+  Shield,
+  Palette
 } from "lucide-react";
 import { 
   getOrCreateProfile, 
@@ -142,6 +143,27 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
   const [usernameInput, setUsernameInput] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Theme state
+  const [currentTheme, setCurrentTheme] = useState("default");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("bcn-theme");
+      if (saved) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setCurrentTheme(saved);
+      }
+    } catch { /* noop */ }
+  }, []);
+
+  const handleThemeChange = (theme: string) => {
+    setCurrentTheme(theme);
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem("bcn-theme", theme);
+    } catch { /* noop */ }
+  };
 
   // Authentication states
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
@@ -604,48 +626,84 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
         </div>
       </div>
 
+      {/* Theme Selector */}
+      <div className="glass-card rounded-2xl p-4 border border-[var(--border)]/60 space-y-3 animate-fade-up">
+        <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+          <Palette size={14} className="text-[var(--primary)]" />
+          <span>{currentLang === "ru" ? "Тема оформления" : currentLang === "es" ? "Tema visual" : currentLang === "fr" ? "Thème visuel" : "Color Theme"}</span>
+        </h3>
+        <div className="grid grid-cols-4 gap-2">
+          {([
+            { id: "default", label: "Zinc", bg: "#09090b", accent: "#3b82f6", ring: "#27272a" },
+            { id: "ocean", label: "Ocean", bg: "#0a1628", accent: "#38bdf8", ring: "#1e3a5f" },
+            { id: "emerald", label: "Forest", bg: "#0a1a14", accent: "#34d399", ring: "#1a3a2a" },
+            { id: "amoled", label: "AMOLED", bg: "#000000", accent: "#a78bfa", ring: "#1a1a1a" },
+          ]).map(theme => (
+            <button
+              key={theme.id}
+              onClick={() => handleThemeChange(theme.id)}
+              className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border text-[10px] font-bold transition-all active:scale-95 ${
+                currentTheme === theme.id
+                  ? "border-[var(--primary)] shadow-[0_0_12px_var(--primary)/20]"
+                  : "border-[var(--border)] opacity-60 hover:opacity-100"
+              }`}
+            >
+              <div
+                className="w-8 h-8 rounded-lg border-2 flex items-center justify-center"
+                style={{ backgroundColor: theme.bg, borderColor: theme.ring }}
+              >
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.accent }} />
+              </div>
+              <span className={currentTheme === theme.id ? "text-[var(--primary)]" : "text-[var(--muted)]"}>{theme.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Stats Cards */}
       <div className="space-y-1.5">
-        <h3 className="text-[10px] font-bold text-[#71717a] uppercase tracking-widest pl-1">{t.profile.stats}</h3>
+        <h3 className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">{t.profile.stats}</h3>
         <div className="grid grid-cols-2 gap-3">
-          <div className="glass-card rounded-xl p-3 border border-[#27272a]/60 flex items-center gap-3">
+          <div className="glass-card rounded-xl p-3 border border-[var(--border)]/60 flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
               <ShieldAlert size={18} />
             </div>
             <div>
-              <p className="text-[10px] text-[#71717a] leading-none">{t.profile.statsReports}</p>
+              <p className="text-[10px] text-[var(--muted)] leading-none">{t.profile.statsReports}</p>
               <p className="text-base font-extrabold text-white mt-1">{profile.reports_count}</p>
             </div>
           </div>
 
-          <div className="glass-card rounded-xl p-3 border border-[#27272a]/60 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+          <div className="glass-card rounded-xl p-3 border border-[var(--border)]/60 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-[var(--primary)]/10 border border-[var(--primary)]/20 flex items-center justify-center text-[var(--primary)]">
               <MessageSquare size={18} />
             </div>
             <div>
-              <p className="text-[10px] text-[#71717a] leading-none">{t.profile.statsComments}</p>
+              <p className="text-[10px] text-[var(--muted)] leading-none">{t.profile.statsComments}</p>
               <p className="text-base font-extrabold text-white mt-1">{profile.comments_count}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Telegram info card */}
-      <div className="glass-card rounded-2xl p-4 border border-[#27272a]/60 space-y-2.5">
-        <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-          <Info size={14} className="text-blue-500" />
-          <span>{t.profile.tgTitle}</span>
-        </h3>
-        <p className="text-xs text-[#a1a1aa] leading-relaxed">
-          {t.profile.tgText}
-        </p>
-        <div className="bg-[#18181b]/50 border border-[#27272a] rounded-xl p-3 text-[11px] leading-relaxed space-y-1.5 text-zinc-400 font-medium">
-          <span className="font-bold text-zinc-300 block mb-0.5">{t.profile.tgHow}</span>
-          <code className="block bg-black p-1.5 rounded font-mono text-[9px] text-zinc-300 select-all border border-[#27272a] mt-1 break-all">
-            https://your-domain.com/api/telegram/webhook
-          </code>
+      {/* Telegram info card — Admin Only */}
+      {profile?.role === "admin" && (
+        <div className="glass-card rounded-2xl p-4 border border-[var(--border)]/60 space-y-2.5 animate-fade-up">
+          <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+            <Info size={14} className="text-[var(--primary)]" />
+            <span>{t.profile.tgTitle}</span>
+          </h3>
+          <p className="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            {t.profile.tgText}
+          </p>
+          <div className="bg-[var(--card)]/50 border border-[var(--border)] rounded-xl p-3 text-[11px] leading-relaxed space-y-1.5 text-[var(--muted-foreground)] font-medium">
+            <span className="font-bold text-zinc-300 block mb-0.5">{t.profile.tgHow}</span>
+            <code className="block bg-black p-1.5 rounded font-mono text-[9px] text-zinc-300 select-all border border-[var(--border)] mt-1 break-all">
+              https://your-domain.com/api/telegram/webhook
+            </code>
+          </div>
         </div>
-      </div>
+      )}
 
 
     </div>

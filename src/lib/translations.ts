@@ -68,7 +68,6 @@ export interface TranslationSchema {
     tgTitle: string;
     tgText: string;
     tgHow: string;
-    storageInfo: string;
   };
 }
 
@@ -156,7 +155,6 @@ export const TRANSLATIONS: Record<Language, TranslationSchema> = {
       tgTitle: "Интеграция с Telegram",
       tgText: "Наше приложение поддерживает автоматический парсинг сообщений из Telegram-чата. Бот считывает текст и наносит точки на карту.",
       tgHow: "Как настроить: подключите бота к вебхуку по адресу:",
-      storageInfo: "Данные сохраняются в локальном хранилище устройства. При подключении Supabase они будут синхронизированы в облаке.",
     },
   },
   en: {
@@ -242,7 +240,6 @@ export const TRANSLATIONS: Record<Language, TranslationSchema> = {
       tgTitle: "Telegram Integration",
       tgText: "Our app supports automatic warning parsing from Telegram chats. The bot reads message texts and plots alerts on the map.",
       tgHow: "How to setup: connect your Telegram bot webhook to this URL:",
-      storageInfo: "Data is saved locally in your device storage. Once Supabase keys are configured, it will sync to the cloud.",
     },
   },
   es: {
@@ -328,7 +325,6 @@ export const TRANSLATIONS: Record<Language, TranslationSchema> = {
       tgTitle: "Integración con Telegram",
       tgText: "Nuestra app admite el análisis automático de alertas desde chats de Telegram. El bot lee textos y añade puntos al mapa.",
       tgHow: "Cómo configurar: conecta el webhook de tu bot de Telegram a esta URL:",
-      storageInfo: "Los datos se guardan de forma local en tu dispositivo. Una vez configuradas las claves de Supabase, se sincronizarán en la nube.",
     },
   },
   fr: {
@@ -414,7 +410,6 @@ export const TRANSLATIONS: Record<Language, TranslationSchema> = {
       tgTitle: "Intégration Telegram",
       tgText: "Notre application prend en charge l'analyse automatique des alertes depuis les salons Telegram. Le bot lit les textes et affiche les points sur la carte.",
       tgHow: "Comment configurer: connectez le webhook de votre bot Telegram à cette URL:",
-      storageInfo: "Les données sont enregistrées localement sur votre appareil. Dès que les clés Supabase seront configurées, elles seront synchronisées dans le cloud.",
     },
   },
 };
