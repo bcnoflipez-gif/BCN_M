@@ -7,7 +7,7 @@ interface TopHeaderProps {
 
 export default function TopHeader({ activeAlertsCount }: TopHeaderProps) {
   return (
-    <header className="sticky top-0 left-0 right-0 h-14 bg-[var(--background)]/80 backdrop-blur-md border-b border-[var(--border)] z-[998] flex items-center justify-between px-4 transition-colors duration-300">
+    <header className="sticky top-0 left-0 right-0 bg-[var(--background)]/80 backdrop-blur-md border-b border-[var(--border)] z-[998] flex items-center justify-between px-4 transition-colors duration-300" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))', height: 'calc(3.5rem + env(safe-area-inset-top, 0px))' }}>
       {/* Brand logo */}
       <div className="flex items-center gap-2">
         <div className="h-8 w-8 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center border border-[var(--primary)]/20">

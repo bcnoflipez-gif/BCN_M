@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ServiceWorkerRegister } from "../components/shared/ServiceWorkerRegister";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,9 +13,24 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#09090b",
+};
+
 export const metadata: Metadata = {
   title: "BCN Metro Live — Карта метро Барселоны",
   description: "Интерактивная карта метро и Rodalies Барселоны с предупреждениями о проверках билетов, задержках и отзывами пассажиров в реальном времени.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "BCN Metro",
+  },
   openGraph: {
     title: "BCN Metro Live — Live Barcelona Metro Map",
     description: "Interactive dark mode map of Barcelona Metro & Rodalies showing ticket inspections, train delays, and live comments in real-time.",
@@ -56,7 +72,14 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        {/* PWA iOS support */}
+        <link rel="apple-touch-icon" href="/icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="BCN Metro" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="format-detection" content="telephone=no" />
+        {/* Theme restore */}
         <script dangerouslySetInnerHTML={{ __html: `
           try {
             var t = localStorage.getItem('bcn-theme');
@@ -64,7 +87,10 @@ export default function RootLayout({
           } catch(e) {}
         ` }} />
       </head>
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>{children}</body>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {children}
+        <ServiceWorkerRegister />
+      </body>
     </html>
   );
 }

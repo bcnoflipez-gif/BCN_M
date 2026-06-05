@@ -27,7 +27,7 @@ export default function BottomNav({ activeTab, onChangeTab, favoritesCount, lang
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-[999] border-t border-[#18181b] bg-[#09090b]/90 backdrop-blur-md pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-[999] border-t border-[var(--border)] bg-[var(--background)]/90 backdrop-blur-md transition-colors duration-300" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="flex h-16 justify-around items-center px-2">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -39,8 +39,8 @@ export default function BottomNav({ activeTab, onChangeTab, favoritesCount, lang
               onClick={() => onChangeTab(item.id)}
               className={`relative flex flex-col items-center justify-center h-12 w-20 rounded-xl transition-all duration-200 active:scale-95 touch-manipulation ${
                 isActive
-                  ? "text-blue-500 font-medium"
-                  : "text-[#71717a] active:text-[#a1a1aa]"
+                  ? "text-[var(--primary)] font-medium"
+                  : "text-[var(--muted)] active:text-[var(--muted-foreground)]"
               }`}
               style={{ minHeight: "44px", minWidth: "44px" }}
               aria-label={item.label}
