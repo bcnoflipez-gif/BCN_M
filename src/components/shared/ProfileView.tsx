@@ -1,0 +1,485 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { 
+  User, 
+  Edit2, 
+  Check, 
+  ShieldAlert, 
+  MessageSquare, 
+  Info, 
+  Smartphone, 
+  HelpCircle, 
+  Globe, 
+  Mail, 
+  Lock, 
+  LogOut 
+} from "lucide-react";
+import { 
+  getOrCreateProfile, 
+  updateProfileUsername, 
+  updateProfileLanguage,
+  signUpUser,
+  signInUser,
+  signOutUser
+} from "../../lib/db";
+import { TRANSLATIONS } from "../../lib/translations";
+import { UserProfile, Language } from "../../types";
+
+interface ProfileViewProps {
+  onLanguageChange: (lang: Language) => void;
+}
+
+const AUTH_TRANSLATIONS = {
+  ru: {
+    signIn: "Войти в аккаунт",
+    signUp: "Создать аккаунт",
+    email: "Электронная почта",
+    password: "Пароль",
+    username: "Имя пользователя",
+    noAccount: "Нет аккаунта? Зарегистрироваться",
+    hasAccount: "Уже есть аккаунт? Войти",
+    logout: "Выйти из системы",
+    loggingIn: "Вход в систему...",
+    registering: "Регистрация...",
+    fillAll: "Пожалуйста, заполните все поля.",
+    passLength: "Пароль должен быть не менее 6 символов."
+  },
+  en: {
+    signIn: "Sign In",
+    signUp: "Create Account",
+    email: "Email Address",
+    password: "Password",
+    username: "Username",
+    noAccount: "Don't have an account? Sign Up",
+    hasAccount: "Already have an account? Sign In",
+    logout: "Log Out",
+    loggingIn: "Signing in...",
+    registering: "Creating account...",
+    fillAll: "Please fill in all fields.",
+    passLength: "Password must be at least 6 characters."
+  },
+  es: {
+    signIn: "Iniciar sesión",
+    signUp: "Crear cuenta",
+    email: "Correo electrónico",
+    password: "Contraseña",
+    username: "Nombre de usuario",
+    noAccount: "¿No tienes una cuenta? Regístrate",
+    hasAccount: "¿Ya tienes una cuenta? Inicia sesión",
+    logout: "Cerrar sesión",
+    loggingIn: "Iniciando sesión...",
+    registering: "Creando cuenta...",
+    fillAll: "Por favor complete todos los campos.",
+    passLength: "La contraseña debe tener al menos 6 caracteres."
+  },
+  fr: {
+    signIn: "Se connecter",
+    signUp: "Créer un compte",
+    email: "Adresse e-mail",
+    password: "Mot de passe",
+    username: "Nom d'utilisateur",
+    noAccount: "Pas de compte ? S'inscrire",
+    hasAccount: "Déjà un compte ? Se connecter",
+    logout: "Se déconnecter",
+    loggingIn: "Connexion en cours...",
+    registering: "Création du compte...",
+    fillAll: "Veuillez remplir tous les champs.",
+    passLength: "Le mot de passe doit contenir au moins 6 caractères."
+  }
+};
+
+export default function ProfileView({ onLanguageChange }: ProfileViewProps) {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Authentication states
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const refreshProfile = () => {
+    const data = getOrCreateProfile();
+    setProfile(data);
+    setUsernameInput(data.username);
+  };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshProfile();
+  }, []);
+
+  if (!profile) return null;
+
+  const currentLang = profile.language || "ru";
+  const t = TRANSLATIONS[currentLang];
+  const authT = AUTH_TRANSLATIONS[currentLang] || AUTH_TRANSLATIONS.en;
+
+  const handleSaveUsername = (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditError(null);
+    setSaveSuccess(false);
+
+    const trimmed = usernameInput.trim();
+    if (trimmed.length < 3) {
+      setEditError(currentLang === "ru" ? "Имя должно быть не менее 3 символов." : "Name must be at least 3 characters.");
+      return;
+    }
+    if (trimmed.length > 20) {
+      setEditError(currentLang === "ru" ? "Имя должно быть не более 20 символов." : "Name must be under 20 characters.");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_а-яА-Я\s-]+$/.test(trimmed)) {
+      setEditError(currentLang === "ru" ? "Имя содержит недопустимые символы." : "Name contains invalid characters.");
+      return;
+    }
+
+    const updated = updateProfileUsername(trimmed);
+    setProfile(updated);
+    setIsEditing(false);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
+  };
+
+  const handleLangSelect = (lang: Language) => {
+    const updated = updateProfileLanguage(lang);
+    setProfile(updated);
+    onLanguageChange(lang);
+  };
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthLoading(true);
+
+    const cleanEmail = email.trim();
+    const cleanPassword = password;
+    const cleanUsername = usernameInput.trim();
+
+    if (!cleanEmail || !cleanPassword || (authMode === "signup" && !cleanUsername)) {
+      setAuthError(authT.fillAll);
+      setAuthLoading(false);
+      return;
+    }
+
+    if (cleanPassword.length < 6) {
+      setAuthError(authT.passLength);
+      setAuthLoading(false);
+      return;
+    }
+
+    try {
+      if (authMode === "signup") {
+        const res = await signUpUser(cleanEmail, cleanPassword, cleanUsername);
+        if (res.success) {
+          setEmail("");
+          setPassword("");
+          refreshProfile();
+        } else {
+          setAuthError(res.error || "Signup failed");
+        }
+      } else {
+        const res = await signInUser(cleanEmail, cleanPassword);
+        if (res.success) {
+          setEmail("");
+          setPassword("");
+          refreshProfile();
+        } else {
+          setAuthError(res.error || "Login failed");
+        }
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setAuthError(errMsg);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOutUser();
+    refreshProfile();
+  };
+
+  return (
+    <div className="flex-1 flex flex-col p-4 pb-20 no-scrollbar overflow-y-auto space-y-4">
+      {/* Title */}
+      <div className="flex-shrink-0">
+        <h2 className="text-xl font-extrabold text-white tracking-tight">{t.profile.title}</h2>
+        <p className="text-xs text-[#71717a] mt-0.5">{t.profile.sub}</p>
+      </div>
+
+      {profile.is_logged_in ? (
+        /* LOGGED IN USER INTERFACE */
+        <>
+          {/* User Card */}
+          <div className="glass-card rounded-2xl p-4 border border-[#27272a]/60 space-y-4">
+            <div className="flex items-center gap-3.5">
+              <div className="h-14 w-14 rounded-full bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-500 relative">
+                <User size={28} />
+                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-[#09090b]"></span>
+              </div>
+              <div className="flex-1 min-w-0">
+                {isEditing ? (
+                  <form onSubmit={handleSaveUsername} className="flex gap-2 items-center">
+                    <input 
+                      type="text" 
+                      value={usernameInput}
+                      onChange={(e) => setUsernameInput(e.target.value)}
+                      className="bg-[#18181b] border border-[#27272a] rounded-lg px-2.5 py-1 text-xs text-[#fafafa] focus:outline-none focus:border-blue-500 w-full font-semibold h-9"
+                      maxLength={20}
+                      autoFocus
+                    />
+                    <button 
+                      type="submit" 
+                      className="h-9 w-9 rounded-lg bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center text-white active:scale-95 transition-all"
+                    >
+                      <Check size={14} />
+                    </button>
+                  </form>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-sm text-white truncate max-w-[180px]">{profile.username}</span>
+                    <button 
+                      onClick={() => setIsEditing(true)}
+                      className="p-1 rounded text-zinc-500 hover:text-zinc-400 hover:bg-zinc-900 active:scale-95 transition"
+                    >
+                      <Edit2 size={12} />
+                    </button>
+                  </div>
+                )}
+                
+                {editError && <p className="text-[10px] text-red-400 font-semibold mt-1">{editError}</p>}
+                {saveSuccess && <p className="text-[10px] text-emerald-400 font-semibold mt-1">{currentLang === "ru" ? "Имя сохранено!" : "Name saved!"}</p>}
+                
+                {profile.email && <p className="text-[10px] text-[#a1a1aa] font-medium truncate mt-0.5">{profile.email}</p>}
+                <p className="text-[10px] text-[#71717a] mt-0.5">{t.profile.created} {new Date(profile.created_at).toLocaleDateString()}</p>
+              </div>
+            </div>
+
+            {/* Device ID / Session ID */}
+            <div className="border-t border-[#27272a]/40 pt-3.5 flex items-start gap-2 text-[10px] text-[#71717a] leading-relaxed">
+              <Smartphone size={14} className="flex-shrink-0 text-zinc-600 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <span className="font-bold text-zinc-500 block">UUID / User ID:</span>
+                <span className="font-mono text-zinc-600 select-all block break-all">{profile.device_session_id}</span>
+              </div>
+            </div>
+
+            {/* Logout Button */}
+            <button
+              onClick={handleLogout}
+              className="w-full h-10 bg-zinc-900 border border-[#27272a] hover:bg-zinc-800 text-red-400 hover:text-red-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+            >
+              <LogOut size={14} />
+              <span>{authT.logout}</span>
+            </button>
+          </div>
+        </>
+      ) : (
+        /* LOGGED OUT - LOGIN & SIGNUP UI */
+        <div className="glass-card rounded-3xl p-5 border border-[#27272a]/60 space-y-4 shadow-2xl bg-[#09090b]/40 backdrop-blur-xl">
+          {/* Auth Toggles */}
+          <div className="flex p-1 bg-[#18181b]/80 border border-[#27272a] rounded-xl">
+            <button
+              onClick={() => {
+                setAuthMode("login");
+                setAuthError(null);
+              }}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold text-center transition-all ${
+                authMode === "login"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-zinc-500 hover:text-zinc-400"
+              }`}
+            >
+              {authT.signIn}
+            </button>
+            <button
+              onClick={() => {
+                setAuthMode("signup");
+                setAuthError(null);
+              }}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold text-center transition-all ${
+                authMode === "signup"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-zinc-500 hover:text-zinc-400"
+              }`}
+            >
+              {authT.signUp}
+            </button>
+          </div>
+
+          <form onSubmit={handleAuthSubmit} className="space-y-3.5">
+            {/* Username field (Signup Only) */}
+            {authMode === "signup" && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">{authT.username}</label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-3 h-4 w-4 text-zinc-500" />
+                  <input
+                    type="text"
+                    value={usernameInput}
+                    onChange={(e) => setUsernameInput(e.target.value)}
+                    placeholder="Enter username"
+                    className="w-full h-11 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/80 rounded-xl pl-10 pr-4 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
+                    maxLength={20}
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Email Field */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">{authT.email}</label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-3 h-4 w-4 text-zinc-500" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  className="w-full h-11 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/80 rounded-xl pl-10 pr-4 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Password Field */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">{authT.password}</label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-3 h-4 w-4 text-zinc-500" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  className="w-full h-11 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/80 rounded-xl pl-10 pr-4 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
+                  minLength={6}
+                  required
+                />
+              </div>
+            </div>
+
+            {authError && (
+              <div className="p-3 bg-red-950/20 border border-red-500/20 text-red-400 text-[10px] font-bold rounded-xl flex gap-2">
+                <ShieldAlert size={14} className="flex-shrink-0 mt-0.5" />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={authLoading}
+              className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold rounded-xl text-xs active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 shadow-[0_4px_20px_rgba(59,130,246,0.25)] border border-blue-500/20"
+            >
+              {authLoading ? (
+                <div className="h-4 w-4 rounded-full border-2 border-t-white border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
+              ) : null}
+              <span>{authLoading ? (authMode === "signup" ? authT.registering : authT.loggingIn) : (authMode === "signup" ? authT.signUp : authT.signIn)}</span>
+            </button>
+          </form>
+
+          {/* Toggle Helper Link */}
+          <div className="text-center">
+            <button
+              onClick={() => {
+                setAuthMode(authMode === "login" ? "signup" : "login");
+                setAuthError(null);
+              }}
+              className="text-[10px] font-bold text-zinc-500 hover:text-blue-400 transition-colors"
+            >
+              {authMode === "login" ? authT.noAccount : authT.hasAccount}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Language Selector */}
+      <div className="glass-card rounded-2xl p-4 border border-[#27272a]/60 space-y-3">
+        <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+          <Globe size={14} className="text-blue-500" />
+          <span>{t.profile.langTitle}</span>
+        </h3>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { code: "ru", label: "Русский" },
+            { code: "en", label: "English" },
+            { code: "es", label: "Español" },
+            { code: "fr", label: "Français" }
+          ] as const).map(lang => (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => handleLangSelect(lang.code)}
+              className={`py-2.5 px-3 rounded-xl border text-xs font-bold text-center transition-all active:scale-95 ${
+                currentLang === lang.code
+                  ? "border-blue-500 text-blue-400 font-extrabold bg-blue-500/10 shadow-[0_0_10px_rgba(59,130,246,0.1)]"
+                  : "border-[#27272a] text-zinc-400 bg-[#18181b]/45 hover:border-zinc-800"
+              }`}
+            >
+              {lang.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="space-y-1.5">
+        <h3 className="text-[10px] font-bold text-[#71717a] uppercase tracking-widest pl-1">{t.profile.stats}</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="glass-card rounded-xl p-3 border border-[#27272a]/60 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+              <ShieldAlert size={18} />
+            </div>
+            <div>
+              <p className="text-[10px] text-[#71717a] leading-none">{t.profile.statsReports}</p>
+              <p className="text-base font-extrabold text-white mt-1">{profile.reports_count}</p>
+            </div>
+          </div>
+
+          <div className="glass-card rounded-xl p-3 border border-[#27272a]/60 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+              <MessageSquare size={18} />
+            </div>
+            <div>
+              <p className="text-[10px] text-[#71717a] leading-none">{t.profile.statsComments}</p>
+              <p className="text-base font-extrabold text-white mt-1">{profile.comments_count}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Telegram info card */}
+      <div className="glass-card rounded-2xl p-4 border border-[#27272a]/60 space-y-2.5">
+        <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+          <Info size={14} className="text-blue-500" />
+          <span>{t.profile.tgTitle}</span>
+        </h3>
+        <p className="text-xs text-[#a1a1aa] leading-relaxed">
+          {t.profile.tgText}
+        </p>
+        <div className="bg-[#18181b]/50 border border-[#27272a] rounded-xl p-3 text-[11px] leading-relaxed space-y-1.5 text-zinc-400 font-medium">
+          <span className="font-bold text-zinc-300 block mb-0.5">{t.profile.tgHow}</span>
+          <code className="block bg-black p-1.5 rounded font-mono text-[9px] text-zinc-300 select-all border border-[#27272a] mt-1 break-all">
+            https://your-domain.com/api/telegram/webhook
+          </code>
+        </div>
+      </div>
+
+      {/* Info card */}
+      <div className="bg-zinc-950/45 border border-zinc-900 rounded-xl p-3.5 flex items-start gap-3">
+        <HelpCircle size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" />
+        <p className="text-[10px] text-zinc-500 leading-normal">
+          {t.profile.storageInfo}
+        </p>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,68 @@
+import React from "react";
+import { Map, List, Heart, User } from "lucide-react";
+import { TRANSLATIONS } from "../../lib/translations";
+import { Language } from "../../types";
+
+export type TabId = "map" | "list" | "favorites" | "profile";
+
+interface BottomNavProps {
+  activeTab: TabId;
+  onChangeTab: (tab: TabId) => void;
+  favoritesCount: number;
+  language: Language;
+}
+
+export default function BottomNav({ activeTab, onChangeTab, favoritesCount, language }: BottomNavProps) {
+  const t = TRANSLATIONS[language] || TRANSLATIONS.ru;
+  const navItems = [
+    { id: "map" as TabId, label: t.tabs.map, icon: Map },
+    { id: "list" as TabId, label: t.tabs.list, icon: List },
+    {
+      id: "favorites" as TabId,
+      label: t.tabs.favorites,
+      icon: Heart,
+      badge: favoritesCount > 0 ? favoritesCount : undefined,
+    },
+    { id: "profile" as TabId, label: t.tabs.profile, icon: User },
+  ];
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-[999] border-t border-[#18181b] bg-[#09090b]/90 backdrop-blur-md pb-safe">
+      <div className="flex h-16 justify-around items-center px-2">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+
+          return (
+            <button
+              key={item.id}
+              onClick={() => onChangeTab(item.id)}
+              className={`relative flex flex-col items-center justify-center h-12 w-20 rounded-xl transition-all duration-200 active:scale-95 touch-manipulation ${
+                isActive
+                  ? "text-blue-500 font-medium"
+                  : "text-[#71717a] active:text-[#a1a1aa]"
+              }`}
+              style={{ minHeight: "44px", minWidth: "44px" }}
+              aria-label={item.label}
+            >
+              <div className="relative">
+                <Icon
+                  size={22}
+                  className={`transition-transform duration-200 ${
+                    isActive ? "scale-110 stroke-[2.25]" : "stroke-[1.75]"
+                  }`}
+                />
+                {item.badge !== undefined && (
+                  <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center animate-pulse">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] mt-1 tracking-wide">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}

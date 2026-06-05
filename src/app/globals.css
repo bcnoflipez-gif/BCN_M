@@ -1,0 +1,131 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --background: #09090b;
+  --foreground: #f4f4f5;
+  
+  --card: #18181b;
+  --card-foreground: #f4f4f5;
+  
+  --popover: #09090b;
+  --popover-foreground: #f4f4f5;
+  
+  --primary: #3b82f6;
+  --primary-foreground: #f8fafc;
+  
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  
+  --muted: #71717a;
+  --muted-foreground: #a1a1aa;
+  
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #d4d4d8;
+  
+  --radius: 0.75rem;
+}
+
+body {
+  background-color: #000000;
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom styles for Leaflet to fit our dark UI */
+.leaflet-container {
+  background: #09090b !important;
+  font-family: inherit;
+  width: 100%;
+  height: 100%;
+}
+
+/* Make Leaflet popups dark and modern */
+.leaflet-popup-content-wrapper {
+  background: #18181b !important;
+  color: #f4f4f5 !important;
+  border: 1px solid #27272a;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-popup-tip {
+  background: #18181b !important;
+  border: 1px solid #27272a;
+}
+
+.leaflet-bar {
+  border: 1px solid #27272a !important;
+  box-shadow: none !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden;
+}
+
+.leaflet-bar a {
+  background-color: #18181b !important;
+  color: #f4f4f5 !important;
+  border-bottom: 1px solid #27272a !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #27272a !important;
+}
+
+/* Hide Leaflet default attribution style or make it dark */
+.leaflet-control-attribution {
+  background: rgba(9, 9, 11, 0.8) !important;
+  color: #71717a !important;
+  font-size: 9px !important;
+}
+
+/* Custom Pulsing Keyframe for active warnings */
+@keyframes alert-pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.animate-alert-pulse {
+  animation: alert-pulse 2s infinite;
+}
+
+/* Glassmorphism custom classes */
+.glass-panel {
+  background: rgba(24, 24, 27, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(39, 39, 42, 0.6);
+}
+
+.glass-card {
+  background: rgba(39, 39, 42, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(63, 63, 70, 0.4);
+}
+
+/* Hide scrollbars for a cleaner mobile app look */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
