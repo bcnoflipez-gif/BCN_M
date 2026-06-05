@@ -113,25 +113,11 @@ $$ language plpgsql security definer;
 
 ## 2. Push Your Local Project to GitHub
 
-If you haven't initialized Git or pushed to GitHub yet, run these commands in your project root folder:
+We have already initialized the local Git repository, added all files, committed them, and configured your remote origin as `git@github.com:bcnoflipez-gif/BCN_M.git`.
+
+Since my terminal sandbox does not have access to your personal SSH keys, please run this single command in **your Mac terminal** to push the code to your GitHub:
 
 ```bash
-# Initialize git repository
-git init
-
-# Add all files to stage
-git add .
-
-# Create initial commit
-git commit -m "feat: barcelona metro live app with instant status updates"
-
-# Rename default branch to main
-git branch -M main
-
-# Add your GitHub remote (replace with your repository URL)
-git remote add origin https://github.com/YOUR_GITHUB_USERNAME/BCN_M.git
-
-# Push code to GitHub
 git push -u origin main
 ```
 
