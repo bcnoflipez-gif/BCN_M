@@ -24,6 +24,7 @@ interface MapProps {
   selectedSystems: string[];
   selectedWarnings: string[];
   language: Language;
+  isAdmin?: boolean;
 }
 
 export default function Map(props: MapProps) {

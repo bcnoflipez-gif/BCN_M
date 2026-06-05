@@ -16,6 +16,7 @@ interface MapInnerProps {
   selectedSystems: string[];
   selectedWarnings: string[];
   language: Language;
+  isAdmin?: boolean;
 }
 
 // Helper component to center map when selectedStationId changes
@@ -55,7 +56,8 @@ export default function MapInner({
   selectedLines,
   selectedSystems,
   selectedWarnings,
-  language
+  language,
+  isAdmin = false
 }: MapInnerProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -271,7 +273,9 @@ export default function MapInner({
             );
           }
         }}
-        className="absolute bottom-36 right-4 z-[900] h-12 w-12 rounded-full bg-[#09090b]/90 border border-[#1c1c1f]/80 text-[#71717a] hover:text-white shadow-lg flex items-center justify-center active:scale-90 transition-all duration-200"
+        className={`absolute right-4 z-[900] h-12 w-12 rounded-full bg-[#09090b]/90 border border-[#1c1c1f]/80 text-[#71717a] hover:text-white shadow-lg flex items-center justify-center active:scale-90 transition-all duration-200 ${
+          isAdmin ? "bottom-40" : "bottom-24"
+        }`}
         title="Center on my location"
         aria-label="Locate me"
         style={{ minHeight: "44px", minWidth: "44px" }}

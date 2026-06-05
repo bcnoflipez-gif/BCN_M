@@ -238,6 +238,7 @@ export default function Home() {
             selectedSystems={selectedSystems}
             selectedWarnings={selectedWarnings}
             language={language}
+            isAdmin={userRole === "admin"}
           />
 
           {/* Floating Action Button for Telegram Simulator */}
