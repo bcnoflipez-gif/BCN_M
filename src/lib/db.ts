@@ -155,7 +155,21 @@ export async function signUpUser(email: string, password: string, username: stri
       });
       if (error) throw error;
       if (data.user) {
-        // Create the profile locally or wait for Supabase trigger
+        // Fallback: manually insert profile in case SQL trigger wasn't created yet
+        try {
+          const newRole = cleanEmail === "bcnoflipez@gmail.com" ? "admin" : "user";
+          await supabase.from("profiles").insert([{
+            id: data.user.id,
+            username: cleanUsername,
+            language: "ru",
+            role: newRole,
+            reports_count: 0,
+            comments_count: 0
+          }]);
+        } catch {
+          // Ignore if trigger already inserted it and returned duplicate key
+        }
+
         const newProfile: UserProfile = {
           username: cleanUsername,
           device_session_id: data.user.id,
@@ -164,7 +178,8 @@ export async function signUpUser(email: string, password: string, username: stri
           comments_count: 0,
           language: "ru",
           email: cleanEmail,
-          is_logged_in: true
+          is_logged_in: true,
+          role: cleanEmail === "bcnoflipez@gmail.com" ? "admin" : "user"
         };
         localStorage.setItem(KEYS.PROFILE, JSON.stringify(newProfile));
         return { success: true };
@@ -201,7 +216,8 @@ export async function signUpUser(email: string, password: string, username: stri
       comments_count: 0,
       language: "ru",
       email: cleanEmail,
-      is_logged_in: true
+      is_logged_in: true,
+      role: cleanEmail === "bcnoflipez@gmail.com" ? "admin" : "user"
     };
     localStorage.setItem(KEYS.PROFILE, JSON.stringify(newProfile));
     return { success: true };
@@ -240,6 +256,20 @@ export async function signInUser(email: string, password: string): Promise<{ suc
             reportsCount = profileData.reports_count || 0;
             commentsCount = profileData.comments_count || 0;
             role = (profileData.role as "user" | "admin") || "user";
+          } else {
+            // Profile row is missing! Create it now
+            const newRole = cleanEmail === "bcnoflipez@gmail.com" ? "admin" : "user";
+            const newProfileRow = {
+              id: data.user.id,
+              username: data.user.user_metadata?.username || ("User_" + data.user.id.substring(0, 5)),
+              language: "ru",
+              role: newRole,
+              reports_count: 0,
+              comments_count: 0
+            };
+            await supabase.from("profiles").insert([newProfileRow]);
+            role = newRole;
+            username = newProfileRow.username;
           }
         } catch (pErr) {
           console.warn("Failed to fetch Supabase profile:", pErr);
