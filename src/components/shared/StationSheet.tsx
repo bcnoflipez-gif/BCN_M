@@ -8,7 +8,7 @@ import {
   Smile
 } from "lucide-react";
 import { Station, METRO_LINES } from "../../lib/metroData";
-import { StationComment, StationReport, ReportType, EmojiType, Language } from "../../types";
+import { StationComment, StationReport, ReportType, EmojiType, Language, StationOverride } from "../../types";
 import { dbService, spamProtection, getOrCreateProfile } from "../../lib/db";
 import { TRANSLATIONS } from "../../lib/translations";
 
@@ -46,9 +46,18 @@ export default function StationSheet({
   // Active Alert micro-description toggles
   const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null);
 
+  // Station Override states
+  const [override, setOverride] = useState<StationOverride | null>(null);
+  const [isEditingOverride, setIsEditingOverride] = useState(false);
+  const [editInfoRu, setEditInfoRu] = useState("");
+  const [editInfoEn, setEditInfoEn] = useState("");
+  const [editPhotoUrl, setEditPhotoUrl] = useState("");
+  const [saveLoading, setSaveLoading] = useState(false);
+
   const profile = getOrCreateProfile();
   const currentSessionId = profile.device_session_id;
   const t = TRANSLATIONS[language];
+  const isAdmin = profile?.role === "admin";
 
   // Fetch comments when station changes
   const loadComments = useCallback(async () => {
@@ -58,11 +67,25 @@ export default function StationSheet({
     }
   }, [station]);
 
+  const loadOverride = useCallback(async () => {
+    if (!station) return;
+    try {
+      const overrides = await dbService.getStationOverrides();
+      const matched = overrides.find(o => o.station_id === station.id);
+      setOverride(matched || null);
+    } catch (err) {
+      console.error("Failed to load overrides:", err);
+    }
+  }, [station]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadComments();
+    loadOverride();
     setClickedDescriptionType(null);
-  }, [loadComments]);
+    setIsEditingOverride(false);
+  }, [loadComments, loadOverride]);
+
 
   // Handle cooldown timers
   useEffect(() => {
@@ -76,6 +99,35 @@ export default function StationSheet({
 
     return () => clearInterval(timer);
   }, []);
+
+  const startEditing = () => {
+    setEditInfoRu(override?.info_text_ru || station?.generalInfo.infoTextRu || "");
+    setEditInfoEn(override?.info_text_en || station?.generalInfo.infoTextEn || "");
+    setEditPhotoUrl(override?.photo_url || "");
+    setIsEditingOverride(true);
+  };
+
+  const handleSaveOverride = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!station) return;
+    setSaveLoading(true);
+    try {
+      const success = await dbService.saveStationOverride(
+        station.id,
+        editInfoRu,
+        editInfoEn,
+        editPhotoUrl
+      );
+      if (success) {
+        await loadOverride();
+        setIsEditingOverride(false);
+      }
+    } catch (err) {
+      console.error("Failed to save override:", err);
+    } finally {
+      setSaveLoading(false);
+    }
+  };
 
   if (!station) return null;
 
@@ -313,99 +365,192 @@ export default function StationSheet({
       {/* Tab Contents */}
       <div className="flex-1 overflow-y-auto p-4 no-scrollbar">
         {/* TAB 1: INFO */}
+        {/* TAB 1: INFO */}
         {activeTab === "info" && (
-          <div className="space-y-4">
-            {/* Active Alerts */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest pl-0.5">
-                {language === "ru" ? "Текущий статус" : "Current Status"}
-              </h3>
-              {(() => {
-                const warning = activeWarning;
-                const info = getReportTypeInfo(warning.type);
-                const WarningIcon = info.icon;
-                const isVirtual = warning.id.startsWith("virtual_");
-                const minutesAgo = Math.floor((new Date().getTime() - new Date(warning.created_at).getTime()) / 60000);
-                const timeText = isVirtual 
-                  ? "" 
-                  : minutesAgo <= 1 ? t.station.justNow : `${minutesAgo} ${t.station.minutesAgo}`;
-                const isExpanded = expandedAlertId === warning.id;
-
-                return (
-                  <div 
-                    onClick={() => setExpandedAlertId(isExpanded ? null : warning.id)}
-                    className={`flex flex-col p-3 rounded-xl border cursor-pointer active:scale-[0.99] transition-all ${info.color}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <WarningIcon size={18} className="mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center mb-0.5">
-                          <span className="font-bold text-xs">{info.label}</span>
-                          {!isVirtual && (
-                            <span className="text-[10px] opacity-70 flex items-center gap-0.5">
-                              <Clock size={10} />
-                              {timeText}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs opacity-90 leading-relaxed font-medium">
-                          {warning.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Localized Micro-description overlay */}
-                    {isExpanded && info.desc && (
-                      <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] opacity-80 leading-normal flex items-start gap-1">
-                        <Info size={12} className="flex-shrink-0 mt-0.5" />
-                        <span>{info.desc}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* General Info */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-[#71717a] uppercase tracking-widest">{t.station.about}</h3>
+          isEditingOverride ? (
+            <form onSubmit={handleSaveOverride} className="space-y-4 animate-in fade-in duration-200">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xs font-bold text-white uppercase tracking-widest pl-0.5">
+                  {language === "ru" ? "Редактирование" : "Edit Details"}
+                </h3>
+              </div>
               
-              <p className="text-xs text-[#fafafa] leading-relaxed font-medium">
-                {language === "ru" ? station.generalInfo.infoTextRu : station.generalInfo.infoTextEn}
-              </p>
-
-              {/* Grid of features */}
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <div className="flex items-center gap-2 bg-[#18181b]/45 border border-[#27272a] p-2.5 rounded-xl">
-                  <Accessibility size={16} className={station.generalInfo.accessibility ? "text-blue-400" : "text-zinc-600"} />
-                  <div className="text-left">
-                    <p className="text-[10px] text-[#71717a] leading-none">{t.station.accessibility}</p>
-                    <p className="text-[11px] font-bold text-white mt-0.5">
-                      {station.generalInfo.accessibility ? t.common.yes : t.common.no}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 bg-[#18181b]/45 border border-[#27272a] p-2.5 rounded-xl">
-                  <ArrowRightLeft size={16} className={station.generalInfo.escalators ? "text-blue-400" : "text-zinc-600"} />
-                  <div className="text-left">
-                    <p className="text-[10px] text-[#71717a] leading-none">{t.station.escalators}</p>
-                    <p className="text-[11px] font-bold text-white mt-0.5">
-                      {station.generalInfo.escalators ? t.common.yes : t.common.no}
-                    </p>
-                  </div>
-                </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">
+                  {language === "ru" ? "Описание (Русский)" : "Description (Russian)"}
+                </label>
+                <textarea
+                  value={editInfoRu}
+                  onChange={(e) => setEditInfoRu(e.target.value)}
+                  rows={3}
+                  className="w-full bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/85 rounded-xl p-3 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
+                  required
+                />
               </div>
 
-              {/* Transfers */}
-              {station.generalInfo.transfers !== "None" && (
-                <div className="bg-[#18181b]/20 border border-[#27272a]/30 p-2.5 rounded-xl text-xs">
-                  <span className="font-bold text-[#71717a] block mb-1">{t.station.transfers}:</span>
-                  <span className="text-[#a1a1aa] font-medium">{station.generalInfo.transfers}</span>
+              <div className="space-y-1">
+                <label className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">
+                  {language === "ru" ? "Описание (Английский)" : "Description (English)"}
+                </label>
+                <textarea
+                  value={editInfoEn}
+                  onChange={(e) => setEditInfoEn(e.target.value)}
+                  rows={3}
+                  className="w-full bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/85 rounded-xl p-3 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">
+                  {language === "ru" ? "Ссылка на фото" : "Photo URL"}
+                </label>
+                <input
+                  type="url"
+                  value={editPhotoUrl}
+                  onChange={(e) => setEditPhotoUrl(e.target.value)}
+                  placeholder="https://example.com/photo.jpg"
+                  className="w-full h-11 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/85 rounded-xl px-3.5 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
+                />
+              </div>
+
+              <div className="pt-2 space-y-2">
+                <button
+                  type="submit"
+                  disabled={saveLoading}
+                  className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 shadow-[0_4px_20px_rgba(59,130,246,0.25)] border border-blue-500/20"
+                >
+                  {saveLoading && (
+                    <div className="h-4 w-4 rounded-full border-2 border-t-white border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
+                  )}
+                  <span>{language === "ru" ? "Сохранить" : "Save Changes"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingOverride(false)}
+                  className="w-full h-11 bg-zinc-900 border border-[#27272a] hover:bg-zinc-800 text-zinc-400 font-bold rounded-xl text-xs flex items-center justify-center active:scale-95 transition-all"
+                >
+                  {t.common.cancel}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              {/* Active Alerts */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest pl-0.5">
+                  {language === "ru" ? "Текущий статус" : "Current Status"}
+                </h3>
+                {(() => {
+                  const warning = activeWarning;
+                  const info = getReportTypeInfo(warning.type);
+                  const WarningIcon = info.icon;
+                  const isVirtual = warning.id.startsWith("virtual_");
+                  const minutesAgo = Math.floor((new Date().getTime() - new Date(warning.created_at).getTime()) / 60000);
+                  const timeText = isVirtual 
+                    ? "" 
+                    : minutesAgo <= 1 ? t.station.justNow : `${minutesAgo} ${t.station.minutesAgo}`;
+                  const isExpanded = expandedAlertId === warning.id;
+
+                  return (
+                    <div 
+                      onClick={() => setExpandedAlertId(isExpanded ? null : warning.id)}
+                      className={`flex flex-col p-3 rounded-xl border cursor-pointer active:scale-[0.99] transition-all ${info.color}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <WarningIcon size={18} className="mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex justify-between items-center mb-0.5">
+                            <span className="font-bold text-xs">{info.label}</span>
+                            {!isVirtual && (
+                              <span className="text-[10px] opacity-70 flex items-center gap-0.5">
+                                <Clock size={10} />
+                                {timeText}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs opacity-90 leading-relaxed font-medium">
+                            {warning.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Localized Micro-description overlay */}
+                      {isExpanded && info.desc && (
+                        <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] opacity-80 leading-normal flex items-start gap-1">
+                          <Info size={12} className="flex-shrink-0 mt-0.5" />
+                          <span>{info.desc}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* General Info */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-bold text-[#71717a] uppercase tracking-widest pl-0.5">{t.station.about}</h3>
+                  {isAdmin && (
+                    <button
+                      onClick={startEditing}
+                      className="h-8 px-3 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 hover:bg-blue-600/20 text-[10px] font-extrabold active:scale-95 transition-all"
+                    >
+                      {language === "ru" ? "Редактировать" : "Edit Info"}
+                    </button>
+                  )}
                 </div>
-              )}
+
+                {override?.photo_url && (
+                  <div className="relative w-full h-32 rounded-xl overflow-hidden border border-[#27272a]/60">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img 
+                      src={override.photo_url} 
+                      alt={station.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                
+                <p className="text-xs text-[#fafafa] leading-relaxed font-medium">
+                  {language === "ru" 
+                    ? (override?.info_text_ru || station.generalInfo.infoTextRu) 
+                    : (override?.info_text_en || station.generalInfo.infoTextEn)}
+                </p>
+
+                {/* Grid of features */}
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div className="flex items-center gap-2 bg-[#18181b]/45 border border-[#27272a] p-2.5 rounded-xl">
+                    <Accessibility size={16} className={station.generalInfo.accessibility ? "text-blue-400" : "text-zinc-600"} />
+                    <div className="text-left">
+                      <p className="text-[10px] text-[#71717a] leading-none">{t.station.accessibility}</p>
+                      <p className="text-[11px] font-bold text-white mt-0.5">
+                        {station.generalInfo.accessibility ? t.common.yes : t.common.no}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-[#18181b]/45 border border-[#27272a] p-2.5 rounded-xl">
+                    <ArrowRightLeft size={16} className={station.generalInfo.escalators ? "text-blue-400" : "text-zinc-600"} />
+                    <div className="text-left">
+                      <p className="text-[10px] text-[#71717a] leading-none">{t.station.escalators}</p>
+                      <p className="text-[11px] font-bold text-white mt-0.5">
+                        {station.generalInfo.escalators ? t.common.yes : t.common.no}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Transfers */}
+                {station.generalInfo.transfers !== "None" && (
+                  <div className="bg-[#18181b]/20 border border-[#27272a]/30 p-2.5 rounded-xl text-xs">
+                    <span className="font-bold text-[#71717a] block mb-1">{t.station.transfers}:</span>
+                    <span className="text-[#a1a1aa] font-medium">{station.generalInfo.transfers}</span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )
         )}
 
         {/* TAB 2: COMMENTS & STATUS UPDATES */}

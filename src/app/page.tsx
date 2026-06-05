@@ -56,11 +56,15 @@ export default function Home() {
     type?: string;
   } | null>(null);
 
+  // User Role State
+  const [userRole, setUserRole] = useState<"user" | "admin">("user");
+
   // Initial loads & setup Supabase Realtime subscriptions for 5k+ scaling
   useEffect(() => {
     const profile = getOrCreateProfile();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLanguage(profile.language || "ru");
+    setUserRole(profile.role || "user");
     
     loadReports();
     loadFavorites();
@@ -101,6 +105,12 @@ export default function Home() {
       return () => clearInterval(interval);
     }
   }, []);
+
+  useEffect(() => {
+    const profile = getOrCreateProfile();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUserRole(profile.role || "user");
+  }, [activeTab]);
 
   async function loadReports() {
     const data = await dbService.getReports();
@@ -231,13 +241,15 @@ export default function Home() {
           />
 
           {/* Floating Action Button for Telegram Simulator */}
-          <button
-            onClick={() => setIsSimOpen(true)}
-            className="absolute bottom-20 right-4 z-[900] h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center active:scale-90 transition-transform border border-blue-500/30"
-            title="Simulate Telegram Message"
-          >
-            <Send size={18} />
-          </button>
+          {userRole === "admin" && (
+            <button
+              onClick={() => setIsSimOpen(true)}
+              className="absolute bottom-20 right-4 z-[900] h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center active:scale-90 transition-transform border border-blue-500/30"
+              title="Simulate Telegram Message"
+            >
+              <Send size={18} />
+            </button>
+          )}
 
           {/* Station Detail pull-up sheet */}
           {selectedStationId && currentSelectedStation && (

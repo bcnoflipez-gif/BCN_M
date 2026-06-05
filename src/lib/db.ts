@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
-import { StationReport, StationComment, ReportType, EmojiType, UserProfile, Language } from "../types";
+import { StationReport, StationComment, ReportType, EmojiType, UserProfile, Language, StationOverride } from "../types";
 
 // Helper: Get the timestamp of the most recent 5:00 AM reset
 export function getLastFiveAM(): Date {
@@ -31,6 +31,7 @@ export function getOrCreateProfile(): UserProfile {
       reports_count: 0,
       comments_count: 0,
       language: "ru",
+      role: "user",
     };
   }
 
@@ -38,9 +39,16 @@ export function getOrCreateProfile(): UserProfile {
   if (stored) {
     try {
       const parsed = JSON.parse(stored);
-      // Ensure language exists on legacy profiles
+      let modified = false;
       if (!parsed.language) {
         parsed.language = "ru";
+        modified = true;
+      }
+      if (!parsed.role) {
+        parsed.role = "user";
+        modified = true;
+      }
+      if (modified) {
         localStorage.setItem(KEYS.PROFILE, JSON.stringify(parsed));
       }
       return parsed;
@@ -57,6 +65,7 @@ export function getOrCreateProfile(): UserProfile {
     reports_count: 0,
     comments_count: 0,
     language: "ru",
+    role: "user",
   };
   localStorage.setItem(KEYS.PROFILE, JSON.stringify(newProfile));
   return newProfile;
@@ -217,6 +226,7 @@ export async function signInUser(email: string, password: string): Promise<{ suc
         let language: Language = "ru";
         let reportsCount = 0;
         let commentsCount = 0;
+        let role: "user" | "admin" = "user";
 
         try {
           const { data: profileData, error: profileErr } = await supabase
@@ -229,9 +239,23 @@ export async function signInUser(email: string, password: string): Promise<{ suc
             language = (profileData.language as Language) || "ru";
             reportsCount = profileData.reports_count || 0;
             commentsCount = profileData.comments_count || 0;
+            role = (profileData.role as "user" | "admin") || "user";
           }
         } catch (pErr) {
           console.warn("Failed to fetch Supabase profile:", pErr);
+        }
+
+        // Force role to admin for the specific email address
+        if (cleanEmail === "bcnoflipez@gmail.com") {
+          role = "admin";
+          try {
+            await supabase
+              .from("profiles")
+              .update({ role: "admin" })
+              .eq("id", data.user.id);
+          } catch (supErr) {
+            console.warn("Could not write admin role to Supabase profiles:", supErr);
+          }
         }
 
         const newProfile: UserProfile = {
@@ -242,7 +266,8 @@ export async function signInUser(email: string, password: string): Promise<{ suc
           comments_count: commentsCount,
           language,
           email: cleanEmail,
-          is_logged_in: true
+          is_logged_in: true,
+          role
         };
         localStorage.setItem(KEYS.PROFILE, JSON.stringify(newProfile));
         return { success: true };
@@ -256,7 +281,22 @@ export async function signInUser(email: string, password: string): Promise<{ suc
   // Mock Fallback
   if (typeof window !== "undefined") {
     const rawUsers = localStorage.getItem("bcn_mock_users") || "[]";
-    const users = JSON.parse(rawUsers) as Array<{ id: string; email: string; password?: string; username: string; created_at: string }>;
+    const users = JSON.parse(rawUsers) as Array<{ id: string; email: string; password?: string; username: string; created_at: string; role?: "user" | "admin" }>;
+    
+    // Force seed admin if missing
+    const adminEmail = "bcnoflipez@gmail.com";
+    if (!users.some((u) => u.email === adminEmail)) {
+      users.push({
+        id: "mock_user_admin_13",
+        email: adminEmail,
+        password: "Lookmy13@13",
+        username: "BCN_Admin",
+        created_at: new Date().toISOString(),
+        role: "admin"
+      });
+      localStorage.setItem("bcn_mock_users", JSON.stringify(users));
+    }
+
     const matched = users.find((u) => u.email === cleanEmail && u.password === password);
     if (!matched) {
       return { success: false, error: "Invalid email or password" };
@@ -270,7 +310,8 @@ export async function signInUser(email: string, password: string): Promise<{ suc
       comments_count: 0,
       language: "ru",
       email: cleanEmail,
-      is_logged_in: true
+      is_logged_in: true,
+      role: matched.role || "user"
     };
     localStorage.setItem(KEYS.PROFILE, JSON.stringify(newProfile));
     return { success: true };
@@ -433,6 +474,24 @@ const localDb = {
       localStorage.setItem(KEYS.FAVORITES, JSON.stringify(newList));
     }
     return newList;
+  },
+
+  getStationOverrides(): StationOverride[] {
+    if (typeof window === "undefined") return [];
+    const raw = localStorage.getItem("bcn_station_overrides");
+    if (!raw) return [];
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  },
+
+  saveStationOverride(override: StationOverride) {
+    if (typeof window === "undefined") return;
+    const overrides = this.getStationOverrides().filter(o => o.station_id !== override.station_id);
+    overrides.push(override);
+    localStorage.setItem("bcn_station_overrides", JSON.stringify(overrides));
   }
 };
 
@@ -644,6 +703,137 @@ export const dbService = {
 
   toggleFavorite(stationId: string): string[] {
     return localDb.toggleFavorite(stationId);
+  },
+
+  // Fetch station overrides (description overrides and photo URLs)
+  async getStationOverrides(): Promise<StationOverride[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("station_overrides")
+          .select("*");
+        if (error) throw error;
+        return data || [];
+      } catch (err) {
+        console.warn("Supabase getStationOverrides failed, using local DB:", err);
+      }
+    }
+    return localDb.getStationOverrides();
+  },
+
+  // Save/upsert station overrides
+  async saveStationOverride(stationId: string, infoTextRu: string, infoTextEn: string, photoUrl: string): Promise<boolean> {
+    const override: StationOverride = {
+      station_id: stationId,
+      info_text_ru: infoTextRu.trim(),
+      info_text_en: infoTextEn.trim(),
+      photo_url: photoUrl.trim(),
+    };
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from("station_overrides")
+          .upsert([override], { onConflict: "station_id" });
+        if (error) throw error;
+        return true;
+      } catch (err) {
+        console.warn("Supabase saveStationOverride failed, using local DB:", err);
+      }
+    }
+
+    localDb.saveStationOverride(override);
+    return true;
+  },
+
+  // Fetch all user profiles for Admin user management
+  async getAllProfiles(): Promise<UserProfile[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .order("username", { ascending: true });
+        if (error) throw error;
+        return data || [];
+      } catch (err) {
+        console.warn("Supabase getAllProfiles failed:", err);
+      }
+    }
+
+    // Local Mock Fallback: load profiles from registered users in localStorage
+    if (typeof window !== "undefined") {
+      const rawUsers = localStorage.getItem("bcn_mock_users") || "[]";
+      const users = JSON.parse(rawUsers) as Array<{ id: string; email: string; username: string; created_at: string; role?: "user" | "admin" }>;
+      
+      const anonProfile = getOrCreateProfile();
+      const profilesList: UserProfile[] = users.map(u => ({
+        username: u.username,
+        device_session_id: u.id,
+        created_at: u.created_at,
+        reports_count: 0,
+        comments_count: 0,
+        language: "ru",
+        email: u.email,
+        role: u.role || "user"
+      }));
+
+      // Make sure BCN_Admin is in the list
+      if (!profilesList.some(p => p.email === "bcnoflipez@gmail.com")) {
+        profilesList.push({
+          username: "BCN_Admin",
+          device_session_id: "mock_user_admin_13",
+          created_at: new Date().toISOString(),
+          reports_count: 0,
+          comments_count: 0,
+          language: "ru",
+          email: "bcnoflipez@gmail.com",
+          role: "admin"
+        });
+      }
+
+      if (!profilesList.some(p => p.device_session_id === anonProfile.device_session_id)) {
+        profilesList.push(anonProfile);
+      }
+
+      return profilesList;
+    }
+    return [];
+  },
+
+  // Update a user's role (Admin promoting/demoting)
+  async updateUserProfileRole(userId: string, role: "user" | "admin"): Promise<boolean> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ role })
+          .eq("id", userId);
+        if (error) throw error;
+        return true;
+      } catch (err) {
+        console.warn("Supabase updateUserProfileRole failed:", err);
+      }
+    }
+
+    // Local Mock Fallback
+    if (typeof window !== "undefined") {
+      const rawUsers = localStorage.getItem("bcn_mock_users") || "[]";
+      const users = JSON.parse(rawUsers) as Array<{ id: string; email: string; password?: string; username: string; created_at: string; role?: "user" | "admin" }>;
+      const userIndex = users.findIndex(u => u.id === userId);
+      if (userIndex !== -1) {
+        users[userIndex].role = role;
+        localStorage.setItem("bcn_mock_users", JSON.stringify(users));
+      }
+
+      const profile = getOrCreateProfile();
+      if (profile.device_session_id === userId) {
+        profile.role = role;
+        localStorage.setItem(KEYS.PROFILE, JSON.stringify(profile));
+      }
+      return true;
+    }
+    return false;
   }
 };
 

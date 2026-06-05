@@ -16,7 +16,8 @@ create table public.profiles (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   reports_count integer default 0 not null,
   comments_count integer default 0 not null,
-  language text default 'ru'::text not null
+  language text default 'ru'::text not null,
+  role text default 'user'::text not null check (role in ('user', 'admin'))
 );
 
 -- Enable RLS for Profiles
@@ -32,11 +33,12 @@ create policy "Users can update their own profiles" on public.profiles
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, username, language)
+  insert into public.profiles (id, username, language, role)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'username', 'User_' || substr(new.id::text, 1, 5)),
-    coalesce(new.raw_user_meta_data->>'language', 'ru')
+    coalesce(new.raw_user_meta_data->>'language', 'ru'),
+    coalesce(new.raw_user_meta_data->>'role', 'user')
   );
   return new;
 end;
@@ -107,6 +109,36 @@ begin
   where id = comment_id;
 end;
 $$ language plpgsql security definer;
+
+
+-- 5. Create Station Overrides Table
+create table public.station_overrides (
+  station_id text primary key,
+  info_text_ru text not null,
+  info_text_en text not null,
+  photo_url text
+);
+
+-- Enable RLS for Station Overrides
+alter table public.station_overrides enable row level security;
+
+create policy "Allow public read of overrides" on public.station_overrides
+  for select using (true);
+
+create policy "Allow admin write of overrides" on public.station_overrides
+  for all using (
+    exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid() and profiles.role = 'admin'
+    )
+  );
+
+
+-- 6. Helper: Promotes a registered user to admin
+-- Run this replacing the email with your target admin email
+-- update public.profiles
+-- set role = 'admin'
+-- where id = (select id from auth.users where email = 'bcnoflipez@gmail.com');
 ```
 
 ---

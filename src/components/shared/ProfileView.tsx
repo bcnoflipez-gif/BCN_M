@@ -13,7 +13,9 @@ import {
   Globe, 
   Mail, 
   Lock, 
-  LogOut 
+  LogOut,
+  Search,
+  Shield
 } from "lucide-react";
 import { 
   getOrCreateProfile, 
@@ -21,10 +23,55 @@ import {
   updateProfileLanguage,
   signUpUser,
   signInUser,
-  signOutUser
+  signOutUser,
+  dbService
 } from "../../lib/db";
 import { TRANSLATIONS } from "../../lib/translations";
 import { UserProfile, Language } from "../../types";
+
+const ADMIN_TRANSLATIONS = {
+  ru: {
+    panelTitle: "Панель администратора",
+    panelSub: "Управление ролями пользователей",
+    searchPlaceholder: "Имя или email...",
+    roleAdmin: "Админ",
+    roleUser: "Пользователь",
+    makeAdmin: "Назначить админом",
+    revokeAdmin: "Снять админа",
+    noUsers: "Пользователи не найдены",
+  },
+  en: {
+    panelTitle: "Admin Panel",
+    panelSub: "Manage user roles",
+    searchPlaceholder: "Username or email...",
+    roleAdmin: "Admin",
+    roleUser: "User",
+    makeAdmin: "Make Admin",
+    revokeAdmin: "Revoke Admin",
+    noUsers: "No users found",
+  },
+  es: {
+    panelTitle: "Panel de Admin",
+    panelSub: "Gestionar roles de usuario",
+    searchPlaceholder: "Usuario o email...",
+    roleAdmin: "Admin",
+    roleUser: "Usuario",
+    makeAdmin: "Hacer Admin",
+    revokeAdmin: "Quitar Admin",
+    noUsers: "No se encontraron usuarios",
+  },
+  fr: {
+    panelTitle: "Panneau d'Admin",
+    panelSub: "Gérer les rôles des utilisateurs",
+    searchPlaceholder: "Nom d'utilisateur ou e-mail...",
+    roleAdmin: "Admin",
+    roleUser: "Utilisateur",
+    makeAdmin: "Rendre Admin",
+    revokeAdmin: "Retirer Admin",
+    noUsers: "Aucun utilisateur trouvé",
+  }
+};
+
 
 interface ProfileViewProps {
   onLanguageChange: (lang: Language) => void;
@@ -103,16 +150,57 @@ export default function ProfileView({ onLanguageChange }: ProfileViewProps) {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
+  // Admin Panel states
+  const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
+
   const refreshProfile = () => {
     const data = getOrCreateProfile();
     setProfile(data);
     setUsernameInput(data.username);
   };
 
+  const fetchProfiles = async () => {
+    try {
+      const users = await dbService.getAllProfiles();
+      setAllProfiles(users);
+    } catch (err) {
+      console.error("Failed to load profiles:", err);
+    }
+  };
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshProfile();
   }, []);
+
+  useEffect(() => {
+    if (profile?.role === "admin") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchProfiles();
+    }
+  }, [profile?.role]);
+
+  const handleToggleRole = async (targetUser: UserProfile) => {
+    if (targetUser.device_session_id === profile?.device_session_id) {
+      const isRu = (profile?.language || "ru") === "ru";
+      alert(isRu ? "Вы не можете изменить свою собственную роль." : "You cannot change your own role.");
+      return;
+    }
+    const newRole = targetUser.role === "admin" ? "user" : "admin";
+    setAdminLoading(true);
+    try {
+      const success = await dbService.updateUserProfileRole(targetUser.device_session_id, newRole);
+      if (success) {
+        await fetchProfiles();
+      }
+    } catch (err) {
+      console.error("Failed to update role:", err);
+    } finally {
+      setAdminLoading(false);
+    }
+  };
 
   if (!profile) return null;
 
@@ -280,6 +368,88 @@ export default function ProfileView({ onLanguageChange }: ProfileViewProps) {
               <span>{authT.logout}</span>
             </button>
           </div>
+
+          {/* Admin Control Panel */}
+          {profile.role === "admin" && (
+            <div className="glass-card rounded-2xl p-4 border border-[#27272a]/60 space-y-3.5">
+              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Shield size={14} className="text-amber-500" />
+                <span>{ADMIN_TRANSLATIONS[currentLang]?.panelTitle || ADMIN_TRANSLATIONS.en.panelTitle}</span>
+              </h3>
+              <p className="text-[10px] text-[#71717a] leading-none">
+                {ADMIN_TRANSLATIONS[currentLang]?.panelSub || ADMIN_TRANSLATIONS.en.panelSub}
+              </p>
+              
+              {/* Search user */}
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={ADMIN_TRANSLATIONS[currentLang]?.searchPlaceholder || ADMIN_TRANSLATIONS.en.searchPlaceholder}
+                  className="w-full h-10 bg-[#09090b]/60 border border-[#27272a] focus:border-amber-500/80 rounded-xl pl-9 pr-4 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
+                />
+              </div>
+
+              {/* User List */}
+              <div className="max-h-60 overflow-y-auto space-y-2 pr-1 no-scrollbar">
+                {allProfiles.filter(p => {
+                  const query = searchQuery.toLowerCase();
+                  return (
+                    p.username.toLowerCase().includes(query) ||
+                    (p.email && p.email.toLowerCase().includes(query)) ||
+                    p.device_session_id.toLowerCase().includes(query)
+                  );
+                }).length === 0 ? (
+                  <p className="text-[10px] text-zinc-500 text-center py-4">
+                    {ADMIN_TRANSLATIONS[currentLang]?.noUsers || ADMIN_TRANSLATIONS.en.noUsers}
+                  </p>
+                ) : (
+                  allProfiles.filter(p => {
+                    const query = searchQuery.toLowerCase();
+                    return (
+                      p.username.toLowerCase().includes(query) ||
+                      (p.email && p.email.toLowerCase().includes(query)) ||
+                      p.device_session_id.toLowerCase().includes(query)
+                    );
+                  }).map(p => {
+                    const adminTLocal = ADMIN_TRANSLATIONS[currentLang] || ADMIN_TRANSLATIONS.en;
+                    return (
+                      <div key={p.device_session_id} className="flex items-center justify-between p-3 rounded-xl bg-[#18181b]/50 border border-[#27272a] gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-xs text-white truncate">{p.username}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase ${
+                              p.role === "admin" 
+                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" 
+                                : "bg-zinc-800 text-zinc-400 border border-zinc-700/50"
+                            }`}>
+                              {p.role === "admin" ? adminTLocal.roleAdmin : adminTLocal.roleUser}
+                            </span>
+                          </div>
+                          {p.email && <span className="text-[9px] text-[#a1a1aa] block truncate mt-0.5">{p.email}</span>}
+                        </div>
+                        {p.device_session_id !== profile.device_session_id && (
+                          <button
+                            onClick={() => handleToggleRole(p)}
+                            disabled={adminLoading}
+                            className={`h-9 px-3 text-[10px] font-bold rounded-lg border transition-all active:scale-95 flex items-center justify-center gap-1 ${
+                              p.role === "admin"
+                                ? "bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
+                                : "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"
+                            }`}
+                          >
+                            {p.role === "admin" ? adminTLocal.revokeAdmin : adminTLocal.makeAdmin}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
         </>
       ) : (
         /* LOGGED OUT - LOGIN & SIGNUP UI */

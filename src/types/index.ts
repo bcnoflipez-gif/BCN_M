@@ -44,4 +44,12 @@ export interface UserProfile {
   language: Language;
   email?: string;
   is_logged_in?: boolean;
+  role?: "user" | "admin";
+}
+
+export interface StationOverride {
+  station_id: string;
+  info_text_ru: string;
+  info_text_en: string;
+  photo_url: string;
 }
