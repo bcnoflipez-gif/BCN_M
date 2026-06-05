@@ -9,7 +9,6 @@ import {
   MessageSquare, 
   Info, 
   Smartphone, 
-  HelpCircle, 
   Globe, 
   Mail, 
   Lock, 
@@ -75,6 +74,7 @@ const ADMIN_TRANSLATIONS = {
 
 interface ProfileViewProps {
   onLanguageChange: (lang: Language) => void;
+  onProfileChange?: (profile: UserProfile) => void;
 }
 
 const AUTH_TRANSLATIONS = {
@@ -136,7 +136,7 @@ const AUTH_TRANSLATIONS = {
   }
 };
 
-export default function ProfileView({ onLanguageChange }: ProfileViewProps) {
+export default function ProfileView({ onLanguageChange, onProfileChange }: ProfileViewProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [usernameInput, setUsernameInput] = useState("");
@@ -159,6 +159,9 @@ export default function ProfileView({ onLanguageChange }: ProfileViewProps) {
     const data = getOrCreateProfile();
     setProfile(data);
     setUsernameInput(data.username);
+    if (onProfileChange) {
+      onProfileChange(data);
+    }
   };
 
   const fetchProfiles = async () => {
@@ -173,6 +176,7 @@ export default function ProfileView({ onLanguageChange }: ProfileViewProps) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -643,13 +647,7 @@ export default function ProfileView({ onLanguageChange }: ProfileViewProps) {
         </div>
       </div>
 
-      {/* Info card */}
-      <div className="bg-zinc-950/45 border border-zinc-900 rounded-xl p-3.5 flex items-start gap-3">
-        <HelpCircle size={18} className="text-zinc-600 mt-0.5 flex-shrink-0" />
-        <p className="text-[10px] text-zinc-500 leading-normal">
-          {t.profile.storageInfo}
-        </p>
-      </div>
+
     </div>
   );
 }

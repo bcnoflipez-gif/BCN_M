@@ -288,7 +288,12 @@ export default function Home() {
 
         {/* TAB 4: PROFILE */}
         {activeTab === "profile" && (
-          <ProfileView onLanguageChange={setLanguage} />
+          <ProfileView 
+            onLanguageChange={setLanguage} 
+            onProfileChange={(prof) => {
+              setUserRole(prof.role || "user");
+            }}
+          />
         )}
       </main>
 

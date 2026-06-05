@@ -13,6 +13,12 @@ export function getLastFiveAM(): Date {
   }
 }
 
+export function isAdminEmail(email?: string): boolean {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  return clean === "bcnoflipez@gmail.com" || clean === "bcnoflipezz@gmail.com";
+}
+
 // Helper: Local Storage Keys
 const KEYS = {
   REPORTS: "bcn_metro_reports",
@@ -157,7 +163,7 @@ export async function signUpUser(email: string, password: string, username: stri
       if (data.user) {
         // Fallback: manually insert profile in case SQL trigger wasn't created yet
         try {
-          const newRole = cleanEmail === "bcnoflipez@gmail.com" ? "admin" : "user";
+          const newRole = isAdminEmail(cleanEmail) ? "admin" : "user";
           await supabase.from("profiles").insert([{
             id: data.user.id,
             username: cleanUsername,
@@ -179,7 +185,7 @@ export async function signUpUser(email: string, password: string, username: stri
           language: "ru",
           email: cleanEmail,
           is_logged_in: true,
-          role: cleanEmail === "bcnoflipez@gmail.com" ? "admin" : "user"
+          role: isAdminEmail(cleanEmail) ? "admin" : "user"
         };
         localStorage.setItem(KEYS.PROFILE, JSON.stringify(newProfile));
         return { success: true };
@@ -217,7 +223,7 @@ export async function signUpUser(email: string, password: string, username: stri
       language: "ru",
       email: cleanEmail,
       is_logged_in: true,
-      role: cleanEmail === "bcnoflipez@gmail.com" ? "admin" : "user"
+      role: isAdminEmail(cleanEmail) ? "admin" : "user"
     };
     localStorage.setItem(KEYS.PROFILE, JSON.stringify(newProfile));
     return { success: true };
@@ -258,7 +264,7 @@ export async function signInUser(email: string, password: string): Promise<{ suc
             role = (profileData.role as "user" | "admin") || "user";
           } else {
             // Profile row is missing! Create it now
-            const newRole = cleanEmail === "bcnoflipez@gmail.com" ? "admin" : "user";
+            const newRole = isAdminEmail(cleanEmail) ? "admin" : "user";
             const newProfileRow = {
               id: data.user.id,
               username: data.user.user_metadata?.username || ("User_" + data.user.id.substring(0, 5)),
@@ -276,7 +282,7 @@ export async function signInUser(email: string, password: string): Promise<{ suc
         }
 
         // Force role to admin for the specific email address
-        if (cleanEmail === "bcnoflipez@gmail.com") {
+        if (isAdminEmail(cleanEmail)) {
           role = "admin";
           try {
             await supabase
@@ -314,8 +320,8 @@ export async function signInUser(email: string, password: string): Promise<{ suc
     const users = JSON.parse(rawUsers) as Array<{ id: string; email: string; password?: string; username: string; created_at: string; role?: "user" | "admin" }>;
     
     // Force seed admin if missing
-    const adminEmail = "bcnoflipez@gmail.com";
-    if (!users.some((u) => u.email === adminEmail)) {
+    const adminEmail = "bcnoflipezz@gmail.com";
+    if (!users.some((u) => u.email === adminEmail || u.email === "bcnoflipez@gmail.com")) {
       users.push({
         id: "mock_user_admin_13",
         email: adminEmail,
@@ -809,7 +815,7 @@ export const dbService = {
       }));
 
       // Make sure BCN_Admin is in the list
-      if (!profilesList.some(p => p.email === "bcnoflipez@gmail.com")) {
+      if (!profilesList.some(p => p.email === "bcnoflipezz@gmail.com" || p.email === "bcnoflipez@gmail.com")) {
         profilesList.push({
           username: "BCN_Admin",
           device_session_id: "mock_user_admin_13",
@@ -817,7 +823,7 @@ export const dbService = {
           reports_count: 0,
           comments_count: 0,
           language: "ru",
-          email: "bcnoflipez@gmail.com",
+          email: "bcnoflipezz@gmail.com",
           role: "admin"
         });
       }
