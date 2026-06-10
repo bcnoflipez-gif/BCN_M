@@ -27,7 +27,7 @@ export default function BottomNav({ activeTab, onChangeTab, favoritesCount, lang
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-[999] border-t border-[var(--border)] bg-[var(--background)]/90 backdrop-blur-md transition-colors duration-300" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    <nav className="absolute bottom-0 left-0 right-0 z-[999] border-t border-[var(--border)] bg-[var(--background)]/90 backdrop-blur-md transition-colors duration-300" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="flex h-16 justify-around items-center px-2">
         {navItems.map((item) => {
           const Icon = item.icon;
