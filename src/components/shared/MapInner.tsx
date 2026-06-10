@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import React, { useEffect, useState, useMemo } from "react";
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Station, METRO_LINES } from "../../lib/metroData";
 import { StationReport, Language } from "../../types";
@@ -48,6 +48,88 @@ function MapController({
   return null;
 }
 
+// Helper component to listen to map zoom changes
+function MapEvents({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
+  const map = useMapEvents({
+    zoomend() {
+      onZoomChange(map.getZoom());
+    },
+  });
+  return null;
+}
+
+interface IconSizeConfig {
+  dotSizePx: number;
+  pulseSizePx: number;
+  selectSizePx: number;
+  showLabel: boolean;
+  labelSizeClass: string;
+  iconSize: [number, number];
+  iconAnchor: [number, number];
+  labelOffsetPx: number;
+}
+
+const getIconSizeConfig = (zoom: number, isSelected: boolean): IconSizeConfig => {
+  if (zoom <= 11) {
+    return {
+      dotSizePx: 8,
+      pulseSizePx: 16,
+      selectSizePx: 14,
+      showLabel: isSelected,
+      labelSizeClass: "text-[8px]",
+      labelOffsetPx: 16,
+      iconSize: [12, 12],
+      iconAnchor: [6, 6],
+    };
+  }
+  if (zoom === 12) {
+    return {
+      dotSizePx: 10,
+      pulseSizePx: 20,
+      selectSizePx: 18,
+      showLabel: isSelected,
+      labelSizeClass: "text-[8px]",
+      labelOffsetPx: 20,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    };
+  }
+  if (zoom === 13) {
+    return {
+      dotSizePx: 12,
+      pulseSizePx: 24,
+      selectSizePx: 22,
+      showLabel: true,
+      labelSizeClass: "text-[8px]",
+      labelOffsetPx: 22,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    };
+  }
+  if (zoom === 14) {
+    return {
+      dotSizePx: 16,
+      pulseSizePx: 36,
+      selectSizePx: 30,
+      showLabel: true,
+      labelSizeClass: "text-[9px]",
+      labelOffsetPx: 24,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    };
+  }
+  return {
+    dotSizePx: 20,
+    pulseSizePx: 44,
+    selectSizePx: 38,
+    showLabel: true,
+    labelSizeClass: "text-[10px]",
+    labelOffsetPx: 28,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  };
+};
+
 export default function MapInner({
   stations,
   activeReports,
@@ -63,6 +145,99 @@ export default function MapInner({
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [shouldCenterUser, setShouldCenterUser] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(13);
+
+  // Memoize all station icons to prevent Leaflet from recreating DOM elements on every render
+  const stationIcons = useMemo(() => {
+    const icons: Record<string, L.DivIcon> = {};
+    
+    stations.forEach((station) => {
+      const stationAlerts = activeReports.filter(r => r.station_id === station.id);
+      const hasAlert = stationAlerts.length > 0;
+      const primaryLineId = station.lines[0];
+      const lineColor = METRO_LINES[primaryLineId]?.color || "#3b82f6";
+      const isSelected = selectedStationId === station.id;
+
+      let alertColor = "rgba(239, 68, 68, 0.5)";
+      let alertBorderColor = "#ef4444";
+
+      if (hasAlert) {
+        const alertType = stationAlerts[0].type;
+        if (alertType === "lliure") {
+          alertColor = "rgba(34, 197, 94, 0.5)";
+          alertBorderColor = "#22c55e";
+        } else if (alertType === "delay" || alertType === "pregunta") {
+          alertColor = "rgba(245, 158, 11, 0.5)";
+          alertBorderColor = "#f59e0b";
+        } else if (alertType === "crowd") {
+          alertColor = "rgba(6, 182, 212, 0.5)";
+          alertBorderColor = "#06b6d4";
+        }
+      }
+
+      const cfg = getIconSizeConfig(zoom, isSelected);
+
+      const htmlString = `
+        <div class="relative flex items-center justify-center">
+          <!-- Pulsing alert ring if station has active reports -->
+          ${
+            hasAlert
+              ? `<div class="absolute rounded-full animate-alert-pulse" style="width: ${cfg.pulseSizePx}px; height: ${cfg.pulseSizePx}px; background: ${alertColor}; border: 1px solid ${alertBorderColor};"></div>`
+              : ""
+          }
+          
+          <!-- Selection ring -->
+          ${
+            isSelected
+              ? `<div class="absolute rounded-full border-2 border-dashed border-white animate-spin" style="width: ${cfg.selectSizePx}px; height: ${cfg.selectSizePx}px; animation-duration: 6s;"></div>`
+              : ""
+          }
+
+          <!-- Core station dot -->
+          <div class="z-10 rounded-full border-2 border-white flex items-center justify-center shadow-lg transition-all duration-200 ${
+            isSelected ? "scale-125" : ""
+          }" style="width: ${cfg.dotSizePx}px; height: ${cfg.dotSizePx}px; background-color: ${lineColor};">
+            <div class="rounded-full bg-white" style="width: ${Math.max(2, Math.floor(cfg.dotSizePx / 4))}px; height: ${Math.max(2, Math.floor(cfg.dotSizePx / 4))}px;"></div>
+          </div>
+
+          <!-- Station label -->
+          ${
+            cfg.showLabel
+              ? `<div class="absolute whitespace-nowrap bg-[#09090b]/85 border border-[#18181b] px-1.5 py-0.5 rounded ${cfg.labelSizeClass} font-bold text-[#f4f4f5] pointer-events-none shadow-md" style="left: ${cfg.labelOffsetPx}px;">
+                  ${station.name}
+                </div>`
+              : ""
+          }
+        </div>
+      `;
+
+      icons[station.id] = L.divIcon({
+        className: `custom-station-icon-${station.id}`,
+        html: htmlString,
+        iconSize: cfg.iconSize,
+        iconAnchor: cfg.iconAnchor
+      });
+    });
+
+    return icons;
+  }, [stations, activeReports, selectedStationId, zoom]);
+
+  // Memoize user location icon to avoid recreation
+  const userLocationIcon = useMemo(() => {
+    const htmlString = `
+      <div class="relative flex items-center justify-center">
+        <div class="absolute w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/30 animate-ping" style="animation-duration: 3s;"></div>
+        <div class="absolute w-5 h-5 rounded-full bg-blue-500/25"></div>
+        <div class="z-20 w-3.5 h-3.5 rounded-full border-2 border-white bg-blue-500 shadow-md"></div>
+      </div>
+    `;
+    return L.divIcon({
+      className: "user-location-icon",
+      html: htmlString,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !navigator.geolocation) return;
@@ -116,89 +291,6 @@ export default function MapInner({
     ? [selectedStation.lat, selectedStation.lng]
     : centerPosition;
 
-  // Create custom icon for each station
-  const createStationIcon = (station: Station) => {
-    const stationAlerts = activeReports.filter(r => r.station_id === station.id);
-    const hasAlert = stationAlerts.length > 0;
-    
-    // Get primary line color
-    const primaryLineId = station.lines[0];
-    const lineColor = METRO_LINES[primaryLineId]?.color || "#3b82f6";
-    const isSelected = selectedStationId === station.id;
-
-    // Define colors for alert types
-    let alertColor = "rgba(239, 68, 68, 0.5)"; // red default
-    let alertBorderColor = "#ef4444";
-
-    if (hasAlert) {
-      // Find highest priority alert type
-      const alertType = stationAlerts[0].type;
-      if (alertType === "lliure") {
-        alertColor = "rgba(34, 197, 94, 0.5)"; // green for lliure (safe)
-        alertBorderColor = "#22c55e";
-      } else if (alertType === "delay" || alertType === "pregunta") {
-        alertColor = "rgba(245, 158, 11, 0.5)"; // amber for delay/pregunta
-        alertBorderColor = "#f59e0b";
-      } else if (alertType === "crowd") {
-        alertColor = "rgba(6, 182, 212, 0.5)"; // cyan for crowd
-        alertBorderColor = "#06b6d4";
-      }
-    }
-
-    const htmlString = `
-      <div class="relative flex items-center justify-center">
-        <!-- Pulsing alert ring if station has active reports -->
-        ${
-          hasAlert
-            ? `<div class="absolute w-10 h-10 rounded-full animate-alert-pulse" style="background: ${alertColor}; border: 1px solid ${alertBorderColor};"></div>`
-            : ""
-        }
-        
-        <!-- Selection ring -->
-        ${
-          isSelected
-            ? `<div class="absolute w-8 h-8 rounded-full border-2 border-dashed border-white animate-spin" style="animation-duration: 6s;"></div>`
-            : ""
-        }
-
-        <!-- Core station dot -->
-        <div class="z-10 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center shadow-lg transition-transform duration-200 ${
-          isSelected ? "scale-125" : ""
-        }" style="background-color: ${lineColor};">
-          <div class="w-1 h-1 rounded-full bg-white"></div>
-        </div>
-
-        <!-- Station label -->
-        <div class="absolute left-6 whitespace-nowrap bg-[#09090b]/85 border border-[#18181b] px-1.5 py-0.5 rounded text-[9px] font-bold text-[#f4f4f5] pointer-events-none shadow-md">
-          ${station.name}
-        </div>
-      </div>
-    `;
-
-    return L.divIcon({
-      className: "custom-station-icon",
-      html: htmlString,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
-  };
-
-  const createUserLocationIcon = () => {
-    const htmlString = `
-      <div class="relative flex items-center justify-center">
-        <div class="absolute w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/30 animate-ping" style="animation-duration: 3s;"></div>
-        <div class="absolute w-5 h-5 rounded-full bg-blue-500/25"></div>
-        <div class="z-20 w-3.5 h-3.5 rounded-full border-2 border-white bg-blue-500 shadow-md"></div>
-      </div>
-    `;
-    return L.divIcon({
-      className: "user-location-icon",
-      html: htmlString,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
-  };
-
   return (
     <div className="w-full h-full relative">
       <MapContainer
@@ -214,11 +306,14 @@ export default function MapInner({
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
 
+        {/* Listen to zoom events */}
+        <MapEvents onZoomChange={setZoom} />
+
         {filteredStations.map((station) => (
           <Marker
             key={station.id}
             position={[station.lat, station.lng]}
-            icon={createStationIcon(station)}
+            icon={stationIcons[station.id]}
             eventHandlers={{
               click: () => onSelectStation(station.id),
             }}
@@ -228,7 +323,7 @@ export default function MapInner({
         {userLocation && (
           <Marker
             position={userLocation}
-            icon={createUserLocationIcon()}
+            icon={userLocationIcon}
           />
         )}
 
