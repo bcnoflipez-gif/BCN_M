@@ -521,12 +521,11 @@ export default function StationSheet({
       </div>
 
       {/* Tab Contents */}
-      <div className="flex-1 overflow-y-auto p-4 no-scrollbar">
-        {/* TAB 1: INFO */}
+      <div className="flex-1 flex flex-col no-scrollbar min-h-0">
         {/* TAB 1: INFO */}
         {activeTab === "info" && (
           isEditingOverride ? (
-            <form onSubmit={handleSaveOverride} className="space-y-4 animate-in fade-in duration-200" noValidate>
+            <form onSubmit={handleSaveOverride} className="flex-1 overflow-y-auto p-4 no-scrollbar space-y-4 animate-in fade-in duration-200" noValidate>
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-bold text-white uppercase tracking-widest pl-0.5">
                   {t.station.editDetails}
@@ -579,7 +578,7 @@ export default function StationSheet({
                 />
               </div>
 
-              <div className="pt-2 space-y-2">
+              <div className="pt-2 space-y-2 pb-4">
                 <button
                   type="submit"
                   disabled={saveLoading}
@@ -600,7 +599,7 @@ export default function StationSheet({
               </div>
             </form>
           ) : (
-            <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="flex-1 overflow-y-auto p-4 no-scrollbar space-y-4 animate-in fade-in duration-200">
               {/* Active Alerts */}
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest pl-0.5">
@@ -722,9 +721,10 @@ export default function StationSheet({
 
         {/* TAB 2: COMMENTS & STATUS UPDATES */}
         {activeTab === "comments" && (
-          <div className="space-y-4 flex flex-col">
-
-            {/* Current Status Badge inside Community tab */}
+          <div className="flex-1 flex flex-col min-h-0 animate-in fade-in duration-200">
+            
+            <div className="flex-shrink-0 p-4 pb-0 space-y-4">
+              {/* Current Status Badge inside Community tab */}
             <div className="space-y-1.5 flex-shrink-0">
               <span className="text-[9px] font-extrabold text-[#71717a] uppercase tracking-wider pl-1">
                 {t.station.currentStatus}
@@ -820,7 +820,7 @@ export default function StationSheet({
    
                 {/* Status explanation description details */}
                 {currentDescriptionType && (
-                  <div className="bg-[#121214]/50 border border-[#27272a]/40 rounded-xl p-2.5 text-[10px] leading-relaxed text-[#a1a1aa] flex items-start gap-2 animate-in fade-in slide-in-from-top-1 duration-150 shadow-inner">
+                  <div className="bg-[#121214]/50 border border-[#27272a]/40 rounded-xl p-2.5 text-[10px] leading-relaxed text-[#a1a1aa] flex items-start gap-2 animate-in fade-in slide-in-from-top-1 duration-150 shadow-inner mt-4">
                     <Info size={12} className="text-blue-400 mt-0.5 flex-shrink-0" />
                     <div>
                       <span className="font-extrabold text-white block mb-0.5">
@@ -834,52 +834,10 @@ export default function StationSheet({
                 )}
               </div>
             ) : null}
-
-            {/* Comment Form */}
-            {profile.is_logged_in ? (
-              <form onSubmit={handleCommunitySubmit} className="space-y-2 flex-shrink-0" noValidate>
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    value={newCommentText}
-                    onChange={(e) => {
-                      setNewCommentText(e.target.value);
-                      setCommentError(null);
-                    }}
-                    placeholder={
-                      commentCooldown > 0 
-                        ? `${t.report.cooldownWait} ${commentCooldown}s` 
-                        : t.station.addCommentPlaceholder
-                    }
-                    disabled={commentCooldown > 0}
-                    className="w-full bg-[#18181b] border border-[#27272a] rounded-xl pl-3.5 pr-12 py-2.5 text-xs text-[#fafafa] focus:outline-none focus:border-blue-500/60 disabled:opacity-50 font-medium h-11"
-                  />
-                  <button 
-                    type="submit" 
-                    disabled={!newCommentText.trim() || commentCooldown > 0}
-                    className="absolute right-1.5 top-1.5 h-8 w-8 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white active:scale-95 transition-all disabled:opacity-30 disabled:scale-100"
-                    aria-label="Send message"
-                  >
-                    <Send size={14} />
-                  </button>
-                </div>
-                {commentError && (
-                  <div className="text-[10px] text-red-400 font-bold bg-red-950/20 border border-red-500/20 px-2.5 py-1.5 rounded">
-                    {commentError}
-                  </div>
-                )}
-              </form>
-            ) : (
-              <div className="p-4 bg-blue-600/5 border border-blue-500/20 rounded-2xl flex flex-col items-center text-center space-y-2.5 flex-shrink-0">
-                <Info size={16} className="text-blue-500" />
-                <p className="text-xs text-[#a1a1aa] leading-relaxed font-semibold">
-                  {t.station.loginToContribute}
-                </p>
-              </div>
-            )}
+            </div>
 
             {/* List of comments */}
-            <div className="space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar border-t border-[#18181b]/50 mt-4">
               {comments.length > 0 ? (
                 comments.map(comment => {
                   const isAuthor = comment.author_session_id === currentSessionId;
@@ -971,6 +929,52 @@ export default function StationSheet({
                 </div>
               )}
             </div>
+
+            {/* Comment Form - Fixed Bottom */}
+            <div className="flex-shrink-0 p-4 border-t border-[#18181b]/50 bg-gradient-to-t from-[#09090b] to-[#09090b]/95">
+              {profile.is_logged_in ? (
+                <form onSubmit={handleCommunitySubmit} className="space-y-2 w-full max-w-[500px] mx-auto" noValidate>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={newCommentText}
+                      onChange={(e) => {
+                        setNewCommentText(e.target.value);
+                        setCommentError(null);
+                      }}
+                      placeholder={
+                        commentCooldown > 0 
+                          ? `${t.report.cooldownWait} ${commentCooldown}s` 
+                          : t.station.addCommentPlaceholder
+                      }
+                      disabled={commentCooldown > 0}
+                      className="w-full bg-[#18181b] border border-[#27272a] rounded-xl pl-3.5 pr-12 py-2.5 text-xs text-[#fafafa] focus:outline-none focus:border-blue-500/60 disabled:opacity-50 font-medium h-11"
+                    />
+                    <button 
+                      type="submit" 
+                      disabled={!newCommentText.trim() || commentCooldown > 0}
+                      className="absolute right-1.5 top-1.5 h-8 w-8 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white active:scale-95 transition-all disabled:opacity-30 disabled:scale-100"
+                      aria-label="Send message"
+                    >
+                      <Send size={14} />
+                    </button>
+                  </div>
+                  {commentError && (
+                    <div className="text-[10px] text-red-400 font-bold bg-red-950/20 border border-red-500/20 px-2.5 py-1.5 rounded">
+                      {commentError}
+                    </div>
+                  )}
+                </form>
+              ) : (
+                <div className="p-3 bg-blue-600/5 border border-blue-500/20 rounded-xl flex items-center justify-center text-center gap-2">
+                  <Info size={14} className="text-blue-500" />
+                  <p className="text-[10px] text-[#a1a1aa] font-semibold">
+                    {t.station.loginToContribute}
+                  </p>
+                </div>
+              )}
+            </div>
+
           </div>
         )}
       </div>
