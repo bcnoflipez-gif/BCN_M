@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Search, ShieldAlert, Clock, Accessibility, MapPin, SlidersHorizontal } from "lucide-react";
+import { Search, ShieldAlert, Clock, Accessibility, Heart, SlidersHorizontal } from "lucide-react";
 import { STATIONS, METRO_LINES } from "../../lib/metroData";
 import { TRANSLATIONS } from "../../lib/translations";
 import { StationReport, Language } from "../../types";
@@ -148,6 +148,31 @@ export default function ListView({ activeReports, onSelectStation, language }: L
     }
   };
 
+  // Favorites state — persisted in localStorage
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const stored = localStorage.getItem("bcn_favorites");
+      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggleFavorite = (stationId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(stationId)) {
+        next.delete(stationId);
+      } else {
+        next.add(stationId);
+      }
+      localStorage.setItem("bcn_favorites", JSON.stringify([...next]));
+      return next;
+    });
+  };
+
   const resetFilters = () => {
     setSelectedWarnings([]);
     setShowMetro(true);
@@ -251,9 +276,20 @@ export default function ListView({ activeReports, onSelectStation, language }: L
               <span>{alertLabel}</span>
             </div>
           )}
-          <div className="h-7 w-7 rounded-lg bg-[#18181b] flex items-center justify-center border border-[#27272a] flex-shrink-0">
-            <MapPin size={14} className="text-zinc-500" />
-          </div>
+          <button
+            onClick={(e) => toggleFavorite(station.id, e)}
+            className="h-8 w-8 rounded-lg bg-[#18181b] flex items-center justify-center border border-[#27272a] flex-shrink-0 active:scale-90 transition-all duration-150"
+            aria-label="Добавить в избранное"
+          >
+            <Heart
+              size={15}
+              className={`transition-all duration-200 ${
+                favorites.has(station.id)
+                  ? "fill-red-500 text-red-500 scale-110"
+                  : "text-zinc-500"
+              }`}
+            />
+          </button>
         </div>
       </div>
     );

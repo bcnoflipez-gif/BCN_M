@@ -162,13 +162,13 @@ export default function FilterDrawer({
   ];
 
   return (
-    <div className="absolute inset-0 z-[1002] flex">
+    <div className="absolute inset-0 z-[1002] flex justify-end">
       {/* Backdrop */}
       <div className="absolute inset-0 glass-backdrop" onClick={onClose} />
 
       {/* Sheet */}
       <div 
-        className="relative glass-drawer rounded-l-[32px] rounded-r-none w-[85%] h-full flex flex-col shadow-[0_8px_32px_rgba(0,0,0,0.6)] animate-slide-in-left z-10"
+        className="relative glass-drawer rounded-r-[32px] rounded-l-none w-[85%] h-full flex flex-col shadow-[-8px_0px_32px_rgba(0,0,0,0.5)] animate-slide-in-right z-10"
       >
         {/* Filter Header */}
         <div className="px-5 py-4 border-b border-white/5 flex items-center gap-3 flex-shrink-0">

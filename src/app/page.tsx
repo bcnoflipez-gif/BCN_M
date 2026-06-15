@@ -241,19 +241,17 @@ export default function Home() {
       <main className="flex-1 relative flex flex-col min-h-0 bg-[#09090b]">
         {/* TAB 1: MAP */}
         <div className={`absolute inset-0 flex flex-col ${activeTab === "map" ? "visible" : "invisible pointer-events-none"}`}>
-          {/* Smart Filter Floating Toggle */}
-          <div className="absolute top-3 left-3 z-[900]">
+          {/* Smart Filter Floating Toggle — matches List tab style */}
+          <div className="absolute top-3 right-3 z-[900]">
             <button
               onClick={() => setIsFilterOpen(true)}
-              className="px-3.5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg border backdrop-blur-md bg-[#09090b]/85 border-[#18181b]/80 text-white flex items-center gap-1.5 active:scale-95 transition-transform"
+              className="relative h-11 w-11 rounded-xl bg-[#18181b] border border-[#27272a] flex items-center justify-center flex-shrink-0 active:scale-95 transition-all shadow-lg"
+              aria-label={language === "ru" ? "Фильтры" : language === "es" ? "Filtros" : language === "fr" ? "Filtres" : "Filters"}
             >
-              <SlidersHorizontal size={14} className="text-blue-500" />
-              <span>
-                {language === "ru" ? "Фильтры" : language === "es" ? "Filtros" : language === "fr" ? "Filtres" : "Filters"}
-              </span>
-              {selectedWarnings.length > 0 && (
-                <span className="h-4 w-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[9px] font-bold">
-                  {selectedWarnings.length}
+              <SlidersHorizontal size={17} className={selectedWarnings.length > 0 || selectedLines.length < Object.keys(METRO_LINES).length || selectedSystems.length < 2 ? "text-blue-400" : "text-zinc-500"} />
+              {(selectedWarnings.length > 0 || selectedLines.length < Object.keys(METRO_LINES).length || selectedSystems.length < 2) && (
+                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center">
+                  {[selectedWarnings.length > 0, selectedLines.length < Object.keys(METRO_LINES).length, selectedSystems.length < 2].filter(Boolean).length}
                 </span>
               )}
             </button>

@@ -279,6 +279,20 @@ button, a, input, select, textarea {
 }
 
 /* ======= SIDEBAR DRAWER ANIMATIONS ======= */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Keep left variant for StationSheet if needed */
 @keyframes slide-in-left {
   from {
     transform: translateX(-100%);
@@ -293,16 +307,43 @@ button, a, input, select, textarea {
 }
 
 .glass-drawer {
-  background: rgba(9, 9, 11, 0.2) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(9, 9, 11, 0.82) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 .glass-backdrop {
-  background: rgba(0, 0, 0, 0.15) !important;
+  background: rgba(0, 0, 0, 0.25) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* ======= BOTTOM SHEET ======= */
+@keyframes slide-up-sheet {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up-sheet 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.glass-sheet {
+  background: rgba(12, 12, 14, 0.94);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sheet-snap {
+  transition: height 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.36s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: height, transform;
+}
+
+
 
 
