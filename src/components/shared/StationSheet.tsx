@@ -722,7 +722,7 @@ export default function StationSheet({
 
         {/* TAB 2: COMMENTS & STATUS UPDATES */}
         {activeTab === "comments" && (
-          <div className="space-y-4 flex flex-col h-full">
+          <div className="space-y-4 flex flex-col">
 
             {/* Current Status Badge inside Community tab */}
             <div className="space-y-1.5 flex-shrink-0">

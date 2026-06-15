@@ -789,11 +789,26 @@ export const dbService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        // Query to check if reaction exists, then insert or delete.
-        // For simplicity and speed, we fallback or use custom sub-table triggers.
-        // We'll perform local DB reaction toggle, and attempt Supabase if configured.
-        // We will try updating comments table directly or a dedicated comment_reactions table.
-        // Let's implement local and fallback to suppress errors.
+        const { data } = await supabase
+          .from("comments")
+          .select("reactions")
+          .eq("id", commentId)
+          .single();
+
+        if (data) {
+          const reactions = data.reactions || { like: [], dislike: [], cop: [], warning: [] };
+          const users = reactions[emoji] || [];
+          if (users.includes(sessionId)) {
+            reactions[emoji] = users.filter((id: string) => id !== sessionId);
+          } else {
+            reactions[emoji] = [...users, sessionId];
+          }
+
+          await supabase
+            .from("comments")
+            .update({ reactions })
+            .eq("id", commentId);
+        }
       } catch (err) {
         console.warn("Supabase reactToComment failed:", err);
       }
