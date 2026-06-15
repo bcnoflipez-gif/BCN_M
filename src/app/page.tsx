@@ -52,50 +52,66 @@ export default function Home() {
   // User Role State
   const [userRole, setUserRole] = useState<"user" | "admin">("user");
 
-  // Initial loads & setup Supabase Realtime subscriptions for 5k+ scaling
+  // Map layer quick-toggle (Google Maps style)
+  type MapLayer = "all" | "metro" | "rodalies" | "none";
+  const [mapLayer, setMapLayer] = useState<MapLayer>("all");
+
+  // Initial loads & setup Supabase Realtime subscriptions
   useEffect(() => {
     const profile = getOrCreateProfile();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLanguage(profile.language || "ru");
     setUserRole(profile.role || "user");
     setIsMounted(true);
-    
+
     loadReports();
     loadFavorites();
 
-    // Setup Supabase Realtime connection
     if (isSupabaseConfigured && supabase) {
       const channel = supabase
-        .channel("realtime-reports-comments")
-        .on(
-          "postgres_changes",
+        .channel("bcn-live")
+
+        // ── REPORTS ──────────────────────────────────────────────
+        .on("postgres_changes",
           { event: "INSERT", schema: "public", table: "reports" },
           (payload) => {
-            const newReport = payload.new as StationReport;
-            // Only add if not expired
-            if (new Date(newReport.expires_at).getTime() > new Date().getTime()) {
-              setActiveReports((prev) => {
-                if (prev.some((r) => r.id === newReport.id)) return prev;
-                return [newReport, ...prev];
-              });
-            }
+            const r = payload.new as StationReport;
+            if (new Date(r.expires_at).getTime() <= Date.now()) return;
+            setActiveReports(prev => {
+              // Replace any existing report for the same station
+              const filtered = prev.filter(x => x.station_id !== r.station_id);
+              return [r, ...filtered];
+            });
           }
         )
-        .on(
-          "postgres_changes",
+        .on("postgres_changes",
+          { event: "UPDATE", schema: "public", table: "reports" },
+          (payload) => {
+            const r = payload.new as StationReport;
+            setActiveReports(prev =>
+              prev.map(x => x.id === r.id ? r : x)
+                  .filter(x => new Date(x.expires_at).getTime() > Date.now())
+            );
+          }
+        )
+        .on("postgres_changes",
           { event: "DELETE", schema: "public", table: "reports" },
-          () => {
-            loadReports(); // reload all active warnings on deletion
+          (payload) => {
+            const deleted = payload.old as { id: string };
+            setActiveReports(prev => prev.filter(x => x.id !== deleted.id));
           }
         )
-        .subscribe();
 
-      return () => {
-        if (supabase) supabase.removeChannel(channel);
-      };
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            console.log("[BCN] Supabase Realtime connected ✓");
+          }
+        });
+
+      return () => { if (supabase) supabase.removeChannel(channel); };
     } else {
-      // Offline fallback: poll reports every 20 seconds
-      const interval = setInterval(loadReports, 20000);
+      // Offline fallback: poll every 15 seconds
+      const interval = setInterval(loadReports, 15000);
       return () => clearInterval(interval);
     }
   }, []);
@@ -118,7 +134,7 @@ export default function Home() {
 
   const handleSelectStation = (stationId: string) => {
     setSelectedStationId(stationId);
-    setActiveTab("map"); // Switch back to map
+    // No tab switch — sheet appears over current tab
   };
 
   const handleToggleFavorite = (stationId: string) => {
@@ -242,7 +258,7 @@ export default function Home() {
         {/* TAB 1: MAP */}
         <div className={`absolute inset-0 flex flex-col ${activeTab === "map" ? "visible" : "invisible pointer-events-none"}`}>
           {/* Smart Filter Floating Toggle — matches List tab style */}
-          <div className="absolute top-3 right-3 z-[900]">
+          <div className="absolute top-4 right-4 z-[900]">
             <button
               onClick={() => setIsFilterOpen(true)}
               className="relative h-11 w-11 rounded-xl bg-[#18181b] border border-[#27272a] flex items-center justify-center flex-shrink-0 active:scale-95 transition-all shadow-lg"
@@ -264,10 +280,16 @@ export default function Home() {
             selectedStationId={selectedStationId}
             onSelectStation={handleSelectStation}
             selectedLines={selectedLines}
-            selectedSystems={selectedSystems}
+            selectedSystems={
+              mapLayer === "all" ? selectedSystems
+              : mapLayer === "metro" ? ["metro"]
+              : mapLayer === "rodalies" ? ["rodalies"]
+              : [] // none
+            }
             selectedWarnings={selectedWarnings}
             language={language}
             isAdmin={userRole === "admin"}
+            mapLayer={mapLayer}
           />
 
           {/* Floating Action Button for Telegram Simulator */}
@@ -281,18 +303,28 @@ export default function Home() {
             </button>
           )}
 
-          {/* Station Detail pull-up sheet */}
-          {selectedStationId && currentSelectedStation && (
-            <StationSheet
-              station={currentSelectedStation}
-              onClose={() => setSelectedStationId(null)}
-              activeReports={activeReports}
-              onReportAdded={loadReports}
-              isFavorite={favoriteIds.includes(selectedStationId)}
-              onToggleFavorite={() => handleToggleFavorite(selectedStationId)}
-              language={language}
-            />
-          )}
+          {/* Google Maps-style layer chips */}
+          <div className="absolute bottom-24 left-4 z-[900] flex gap-1.5">
+            {([
+              { id: "all",      label: language === "ru" ? "Все" : "All" },
+              { id: "metro",    label: "Metro" },
+              { id: "rodalies", label: "Rodalies" },
+              { id: "none",     label: language === "ru" ? "Скрыть" : "Hide" },
+            ] as { id: MapLayer; label: string }[]).map(chip => (
+              <button
+                key={chip.id}
+                onClick={() => setMapLayer(chip.id)}
+                className={`h-8 px-3 rounded-full text-[11px] font-bold transition-all active:scale-95 border shadow-lg ${
+                  mapLayer === chip.id
+                    ? "bg-white text-[#09090b] border-white"
+                    : "bg-[#09090b]/90 text-zinc-400 border-[#27272a]"
+                }`}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
         </div>
 
         {/* TAB 2: LIST */}
@@ -325,6 +357,19 @@ export default function Home() {
           />
         )}
       </main>
+
+      {/* Global Station Bottom Sheet — renders above any active tab */}
+      {selectedStationId && currentSelectedStation && (
+        <StationSheet
+          station={currentSelectedStation}
+          onClose={() => setSelectedStationId(null)}
+          activeReports={activeReports}
+          onReportAdded={loadReports}
+          isFavorite={favoriteIds.includes(selectedStationId)}
+          onToggleFavorite={() => handleToggleFavorite(selectedStationId)}
+          language={language}
+        />
+      )}
 
       <FilterDrawer
         isOpen={isFilterOpen}

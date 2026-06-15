@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import { Station, METRO_LINES } from "../../lib/metroData";
+import { Station, METRO_LINES, STATIONS, LINE_ROUTES } from "../../lib/metroData";
 import { StationReport, Language } from "../../types";
 import { LocateFixed } from "lucide-react";
 
@@ -17,6 +17,7 @@ interface MapInnerProps {
   selectedWarnings: string[];
   language: Language;
   isAdmin?: boolean;
+  mapLayer?: "all" | "metro" | "rodalies" | "none";
 }
 
 // Helper component to center map when selectedStationId changes
@@ -139,7 +140,8 @@ export default function MapInner({
   selectedSystems,
   selectedWarnings,
   language,
-  isAdmin = false
+  isAdmin = false,
+  mapLayer = "all",
 }: MapInnerProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -178,32 +180,33 @@ export default function MapInner({
       const cfg = getIconSizeConfig(zoom, isSelected);
 
       const htmlString = `
-        <div class="relative flex items-center justify-center">
+        <div class="relative flex items-center justify-center" style="width:${cfg.iconSize[0] + 16}px; height:${cfg.iconSize[1] + 16}px;">
+          <!-- Transparent hit-area enlarger for easier tapping -->
+          <div class="absolute inset-0 rounded-full"></div>
+
           <!-- Pulsing alert ring if station has active reports -->
           ${
             hasAlert
-              ? `<div class="absolute rounded-full animate-alert-pulse" style="width: ${cfg.pulseSizePx}px; height: ${cfg.pulseSizePx}px; background: ${alertColor}; border: 1px solid ${alertBorderColor};"></div>`
-              : ""
-          }
-          
-          <!-- Selection ring -->
-          ${
-            isSelected
-              ? `<div class="absolute rounded-full border-2 border-dashed border-white animate-spin" style="width: ${cfg.selectSizePx}px; height: ${cfg.selectSizePx}px; animation-duration: 6s;"></div>`
+              ? `<div class="absolute rounded-full animate-alert-pulse" style="width: ${cfg.pulseSizePx}px; height: ${cfg.pulseSizePx}px; background: ${alertColor}; border: 1.5px solid ${alertBorderColor};"></div>`
               : ""
           }
 
-          <!-- Core station dot -->
-          <div class="z-10 rounded-full border-2 border-white flex items-center justify-center shadow-lg transition-all duration-200 ${
+          <!-- Selection glow ring (same color as line) -->
+          ${
+            isSelected
+              ? `<div class="absolute rounded-full" style="width: ${cfg.selectSizePx}px; height: ${cfg.selectSizePx}px; border: 2px solid ${lineColor}; opacity: 0.6; box-shadow: 0 0 0 2px ${lineColor}30;"></div>`
+              : ""
+          }
+
+          <!-- Core station dot — minimal solid disc -->
+          <div class="z-10 rounded-full shadow-md transition-all duration-200 ${
             isSelected ? "scale-125" : ""
-          }" style="width: ${cfg.dotSizePx}px; height: ${cfg.dotSizePx}px; background-color: ${lineColor};">
-            <div class="rounded-full bg-white" style="width: ${Math.max(2, Math.floor(cfg.dotSizePx / 4))}px; height: ${Math.max(2, Math.floor(cfg.dotSizePx / 4))}px;"></div>
-          </div>
+          }" style="width: ${cfg.dotSizePx}px; height: ${cfg.dotSizePx}px; background-color: ${lineColor}; box-shadow: 0 1px 4px ${lineColor}60;"></div>
 
           <!-- Station label -->
           ${
             cfg.showLabel
-              ? `<div class="absolute whitespace-nowrap bg-[#09090b]/85 border border-[#18181b] px-1.5 py-0.5 rounded ${cfg.labelSizeClass} font-bold text-[#f4f4f5] pointer-events-none shadow-md" style="left: ${cfg.labelOffsetPx}px;">
+              ? `<div class="absolute whitespace-nowrap bg-[#09090b]/85 border border-[#18181b] px-1.5 py-0.5 rounded ${cfg.labelSizeClass} font-bold text-[#f4f4f5] pointer-events-none shadow-md" style="left: ${cfg.labelOffsetPx + 6}px;">
                   ${station.name}
                 </div>`
               : ""
@@ -214,13 +217,58 @@ export default function MapInner({
       icons[station.id] = L.divIcon({
         className: `custom-station-icon-${station.id}`,
         html: htmlString,
-        iconSize: cfg.iconSize,
-        iconAnchor: cfg.iconAnchor
+        iconSize: [cfg.iconSize[0] + 16, cfg.iconSize[1] + 16] as [number, number],
+        iconAnchor: [(cfg.iconAnchor[0] + 8), (cfg.iconAnchor[1] + 8)] as [number, number],
       });
     });
 
     return icons;
   }, [stations, activeReports, selectedStationId, zoom]);
+
+  // Memoize polyline routes — all stations per line, geographically sorted
+  const polylines = useMemo(() => {
+    // Nearest-neighbor sort: start from westernmost station, always go to closest unvisited
+    const sortByRoute = (pts: { id: string; lat: number; lng: number }[]) => {
+      if (pts.length < 2) return pts;
+      const remaining = [...pts];
+      // Start from westernmost (lowest lng)
+      const startIdx = remaining.reduce((best, p, i) =>
+        p.lng < remaining[best].lng ? i : best, 0);
+      const sorted = [remaining.splice(startIdx, 1)[0]];
+      while (remaining.length > 0) {
+        const last = sorted[sorted.length - 1];
+        let closestIdx = 0;
+        let closestDist = Infinity;
+        remaining.forEach((p, i) => {
+          const d = Math.hypot(p.lat - last.lat, p.lng - last.lng);
+          if (d < closestDist) { closestDist = d; closestIdx = i; }
+        });
+        sorted.push(remaining.splice(closestIdx, 1)[0]);
+      }
+      return sorted;
+    };
+
+    return Object.entries(METRO_LINES).flatMap(([lineId, line]) => {
+      // Filter by mapLayer
+      if (mapLayer === "none") return [];
+      if (mapLayer === "metro" && line.type !== "metro") return [];
+      if (mapLayer === "rodalies" && line.type !== "rodalies") return [];
+      // Filter by selectedLines
+      if (!selectedLines.includes(lineId)) return [];
+
+      const stationsForLine = STATIONS
+        .filter(s => s.lines.includes(lineId))
+        .map(s => ({ id: s.id, lat: s.lat, lng: s.lng }));
+
+      if (stationsForLine.length < 2) return [];
+
+      const sorted = sortByRoute(stationsForLine);
+      const coords: [number, number][] = sorted.map(s => [s.lat, s.lng]);
+
+      return [{ lineId, color: line.color, type: line.type, coords }];
+    });
+  }, [mapLayer, selectedLines]);
+
 
   // Memoize user location icon to avoid recreation
   const userLocationIcon = useMemo(() => {
@@ -311,6 +359,22 @@ export default function MapInner({
 
         {/* Listen to zoom events */}
         <MapEvents onZoomChange={setZoom} />
+
+        {/* Route polylines — drawn below station markers */}
+        {polylines.map(({ lineId, color, type, coords }) => (
+          <Polyline
+            key={lineId}
+            positions={coords}
+            pathOptions={{
+              color,
+              weight: type === "metro" ? 2 : 1.5,
+              opacity: 0.5,
+              dashArray: type === "rodalies" ? "5 4" : undefined,
+              lineCap: "round",
+              lineJoin: "round",
+            }}
+          />
+        ))}
 
         {filteredStations.map((station) => (
           <Marker

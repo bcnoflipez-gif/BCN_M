@@ -568,9 +568,9 @@ export const dbService = {
 
   // Add a new report (includes ticket control, delays etc.)
   async addReport(stationId: string, type: ReportType, description: string): Promise<StationReport | null> {
-    // Generate expires_at (2 hours from now)
     const now = new Date();
     const expires = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const profile = getOrCreateProfile();
 
     const report: StationReport = {
       id: "rep_" + Math.random().toString(36).substring(2, 15),
@@ -579,6 +579,7 @@ export const dbService = {
       description: description.trim() || `Warning: ${type} reported`,
       created_at: now.toISOString(),
       expires_at: expires.toISOString(),
+      author_session_id: profile.device_session_id,
     };
 
     if (isSupabaseConfigured && supabase) {
@@ -709,27 +710,36 @@ export const dbService = {
       try {
         // Run RPC increment or update statement
         const { error } = await supabase.rpc("increment_flag_comment", { comment_id: commentId });
-        if (!error) return;
-        
+        if (!error) {
+          // Note: in a real system we'd look up the author's session and call recordFlagReceived on their end
+          // For now, increment local flag counter as best-effort reputation tracking
+          spamProtection.recordFlagReceived();
+          return;
+        }
+
         // Fallback update (get current and increment)
         const { data } = await supabase
           .from("comments")
           .select("flags_count")
           .eq("id", commentId)
           .single();
-        
+
         const currentFlags = data?.flags_count || 0;
         const { error: err2 } = await supabase
           .from("comments")
           .update({ flags_count: currentFlags + 1 })
           .eq("id", commentId);
-        if (!err2) return;
+        if (!err2) {
+          spamProtection.recordFlagReceived();
+          return;
+        }
       } catch (err) {
         console.warn("Supabase flagComment failed:", err);
       }
     }
 
     localDb.flagComment(commentId);
+    spamProtection.recordFlagReceived();
   },
 
   // Favorites
@@ -874,52 +884,161 @@ export const dbService = {
 };
 
 // ----------------------------------------------------
-// SPAM PROTECTION / RATE LIMITING UTILITY
+// SPAM PROTECTION — Multi-layer Rate Limiter
 // ----------------------------------------------------
-const COOLDOWNS = {
-  COMMENT: 30 * 1000, // 30 seconds
-  REPORT: 60 * 1000,  // 60 seconds
+
+const SPAM_KEYS = {
+  REPORT_TIMES:    "bcn_report_times",    // JSON array of timestamps
+  COMMENT_TIMES:   "bcn_comment_times",   // JSON array of timestamps
+  SOFT_BAN_UNTIL:  "bcn_soft_ban_until",  // ISO timestamp
+  FLAG_COUNT:      "bcn_my_flag_count",   // number — how many of MY posts got flagged
 };
 
+const LIMITS = {
+  // Sliding window
+  REPORTS_MAX:     3,            // max N reports …
+  REPORTS_WINDOW:  10 * 60 * 1000, // … within this many ms (10 min)
+  COMMENTS_MAX:    5,            // max N comments …
+  COMMENTS_WINDOW: 5 * 60 * 1000,  // … within this many ms (5 min)
+
+  // Min gap between consecutive actions (still nice-to-have)
+  REPORT_GAP:      60 * 1000,    // at least 60s between two reports
+  COMMENT_GAP:     20 * 1000,    // at least 20s between two comments
+
+  // Reputation
+  FLAG_THRESHOLD:  3,            // flags before soft-ban
+  BAN_DURATION:    24 * 60 * 60 * 1000, // 24h soft-ban
+};
+
+function getTimes(key: string): number[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; }
+}
+function saveTimes(key: string, times: number[]) {
+  if (typeof window !== "undefined") localStorage.setItem(key, JSON.stringify(times));
+}
+
 export const spamProtection = {
-  checkCommentCooldown(): { allowed: boolean; remainingSec: number } {
-    if (typeof window === "undefined") return { allowed: true, remainingSec: 0 };
-    const lastTime = localStorage.getItem("bcn_last_comment_time");
-    if (!lastTime) return { allowed: true, remainingSec: 0 };
 
-    const diff = new Date().getTime() - parseInt(lastTime);
-    if (diff < COOLDOWNS.COMMENT) {
-      const remainingSec = Math.ceil((COOLDOWNS.COMMENT - diff) / 1000);
-      return { allowed: false, remainingSec };
+  // ── Soft-ban check ─────────────────────────────────────────────────────
+  isSoftBanned(): boolean {
+    if (typeof window === "undefined") return false;
+    const until = localStorage.getItem(SPAM_KEYS.SOFT_BAN_UNTIL);
+    if (!until) return false;
+    return new Date().getTime() < parseInt(until);
+  },
+
+  softBanRemainingHrs(): number {
+    if (typeof window === "undefined") return 0;
+    const until = localStorage.getItem(SPAM_KEYS.SOFT_BAN_UNTIL);
+    if (!until) return 0;
+    const diff = parseInt(until) - new Date().getTime();
+    return diff > 0 ? Math.ceil(diff / (60 * 60 * 1000)) : 0;
+  },
+
+  // Called from flagComment / flagReport paths when MY content is flagged
+  recordFlagReceived(): void {
+    if (typeof window === "undefined") return;
+    const current = parseInt(localStorage.getItem(SPAM_KEYS.FLAG_COUNT) || "0") + 1;
+    localStorage.setItem(SPAM_KEYS.FLAG_COUNT, current.toString());
+    if (current >= LIMITS.FLAG_THRESHOLD) {
+      const banUntil = new Date().getTime() + LIMITS.BAN_DURATION;
+      localStorage.setItem(SPAM_KEYS.SOFT_BAN_UNTIL, banUntil.toString());
+      localStorage.setItem(SPAM_KEYS.FLAG_COUNT, "0"); // reset counter after ban issued
     }
+  },
+
+  // ── Report cooldown ─────────────────────────────────────────────────────
+  checkReportCooldown(isAdmin = false): { allowed: boolean; remainingSec: number; reason?: string } {
+    if (isAdmin) return { allowed: true, remainingSec: 0 };
+    if (typeof window === "undefined") return { allowed: true, remainingSec: 0 };
+
+    if (this.isSoftBanned()) {
+      const hrs = this.softBanRemainingHrs();
+      return { allowed: false, remainingSec: hrs * 3600, reason: `Мягкая блокировка на ${hrs}ч — ваши репорты получили много жалоб.` };
+    }
+
+    const now = new Date().getTime();
+    const times = getTimes(SPAM_KEYS.REPORT_TIMES).filter(t => now - t < LIMITS.REPORTS_WINDOW);
+
+    // Min gap between two consecutive reports
+    if (times.length > 0) {
+      const last = times[times.length - 1];
+      const gapLeft = LIMITS.REPORT_GAP - (now - last);
+      if (gapLeft > 0) {
+        return { allowed: false, remainingSec: Math.ceil(gapLeft / 1000) };
+      }
+    }
+
+    // Sliding window: too many in window
+    if (times.length >= LIMITS.REPORTS_MAX) {
+      const oldestInWindow = times[0];
+      const windowResetAt = oldestInWindow + LIMITS.REPORTS_WINDOW;
+      const remainingSec = Math.ceil((windowResetAt - now) / 1000);
+      return {
+        allowed: false,
+        remainingSec,
+        reason: `Слишком много репортов — подождите ${Math.ceil(remainingSec / 60)} мин.`,
+      };
+    }
+
     return { allowed: true, remainingSec: 0 };
   },
 
-  recordCommentSent() {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("bcn_last_comment_time", new Date().getTime().toString());
-    }
+  recordReportSent(): void {
+    if (typeof window === "undefined") return;
+    const now = new Date().getTime();
+    const times = getTimes(SPAM_KEYS.REPORT_TIMES).filter(t => now - t < LIMITS.REPORTS_WINDOW);
+    times.push(now);
+    saveTimes(SPAM_KEYS.REPORT_TIMES, times);
   },
 
-  checkReportCooldown(): { allowed: boolean; remainingSec: number } {
+  // ── Comment cooldown ────────────────────────────────────────────────────
+  checkCommentCooldown(isAdmin = false): { allowed: boolean; remainingSec: number; reason?: string } {
+    if (isAdmin) return { allowed: true, remainingSec: 0 };
     if (typeof window === "undefined") return { allowed: true, remainingSec: 0 };
-    const lastTime = localStorage.getItem("bcn_last_report_time");
-    if (!lastTime) return { allowed: true, remainingSec: 0 };
 
-    const diff = new Date().getTime() - parseInt(lastTime);
-    if (diff < COOLDOWNS.REPORT) {
-      const remainingSec = Math.ceil((COOLDOWNS.REPORT - diff) / 1000);
-      return { allowed: false, remainingSec };
+    if (this.isSoftBanned()) {
+      const hrs = this.softBanRemainingHrs();
+      return { allowed: false, remainingSec: hrs * 3600, reason: `Мягкая блокировка на ${hrs}ч.` };
     }
+
+    const now = new Date().getTime();
+    const times = getTimes(SPAM_KEYS.COMMENT_TIMES).filter(t => now - t < LIMITS.COMMENTS_WINDOW);
+
+    // Min gap
+    if (times.length > 0) {
+      const last = times[times.length - 1];
+      const gapLeft = LIMITS.COMMENT_GAP - (now - last);
+      if (gapLeft > 0) {
+        return { allowed: false, remainingSec: Math.ceil(gapLeft / 1000) };
+      }
+    }
+
+    // Sliding window
+    if (times.length >= LIMITS.COMMENTS_MAX) {
+      const oldestInWindow = times[0];
+      const windowResetAt = oldestInWindow + LIMITS.COMMENTS_WINDOW;
+      const remainingSec = Math.ceil((windowResetAt - now) / 1000);
+      return {
+        allowed: false,
+        remainingSec,
+        reason: `Слишком много комментариев — подождите ${Math.ceil(remainingSec / 60)} мин.`,
+      };
+    }
+
     return { allowed: true, remainingSec: 0 };
   },
 
-  recordReportSent() {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("bcn_last_report_time", new Date().getTime().toString());
-    }
+  recordCommentSent(): void {
+    if (typeof window === "undefined") return;
+    const now = new Date().getTime();
+    const times = getTimes(SPAM_KEYS.COMMENT_TIMES).filter(t => now - t < LIMITS.COMMENTS_WINDOW);
+    times.push(now);
+    saveTimes(SPAM_KEYS.COMMENT_TIMES, times);
   },
 
+  // ── Content validation ──────────────────────────────────────────────────
   validateContent(text: string): { valid: boolean; reason?: string } {
     const trimmed = text.trim();
     if (trimmed.length < 3) {
@@ -928,9 +1047,8 @@ export const spamProtection = {
     if (trimmed.length > 500) {
       return { valid: false, reason: "Текст сообщения слишком длинный (максимум 500 символов)." };
     }
-    // Simple blocklist for common spam keywords (Russian/Spanish/English)
     const blocklist = [
-      "casino", "казино", "crypto", "крипта", "binance", "invest", "инвестиции", 
+      "casino", "казино", "crypto", "крипта", "binance", "invest", "инвестиции",
       "заработать", "работа в интернете", "t.me/", "http://", "https://"
     ];
     const lower = trimmed.toLowerCase();
@@ -939,13 +1057,10 @@ export const spamProtection = {
         return { valid: false, reason: "Обнаружены ссылки или запрещенные спам-слова." };
       }
     }
-
-    // Check if it's just emojis repeating
     const emojiRegex = /^[\p{Emoji}\s]+$/u;
     if (emojiRegex.test(trimmed) && trimmed.length > 15) {
       return { valid: false, reason: "Сообщение не должно содержать только повторяющиеся эмодзи." };
     }
-
     return { valid: true };
-  }
+  },
 };

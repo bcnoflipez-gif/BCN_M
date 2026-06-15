@@ -1152,3 +1152,59 @@ export const getStationById = (id: string): Station | undefined => {
 export const getStationsByLine = (lineId: string): Station[] => {
   return STATIONS.filter(s => s.lines.includes(lineId));
 };
+
+// Ordered station sequences per line for drawing polylines on the map
+export const LINE_ROUTES: Record<string, string[]> = {
+  // ── METRO ────────────────────────────────────────────────────────────────
+  L1: [
+    "bellvitge", "torrassa", "espanya", "universitat",
+    "catalunya", "urquinaona", "arc_de_triomf", "marina",
+    "el_clot", "la_sagrera", "fabra_i_puig", "santa_coloma", "fondo",
+  ],
+  L2: [
+    "paral_lel", "universitat", "passeig_de_gracia",
+    "sagrada_familia", "el_clot", "gorg", "pep_ventura", "badalona_pompeu_fabra",
+  ],
+  L3: [
+    "cornella_centre", "sants_estacio", "espanya", "paral_lel",
+    "drassanes", "liceu", "catalunya", "passeig_de_gracia", "diagonal",
+  ],
+  L4: [
+    "barceloneta", "jaume_i", "urquinaona", "passeig_de_gracia",
+    "diagonal", "poblenou", "bogatell",
+  ],
+  L5: [
+    "cornella_centre", "can_vidalet", "sants_estacio",
+    "diagonal", "sagrada_familia", "la_sagrera",
+  ],
+  L9N: ["la_sagrera", "fondo"],
+  L9S: ["aeroport_t1", "aeroport_t2", "el_prat_estacio", "torrassa"],
+  L10N: ["la_sagrera", "gorg"],
+  L10S: ["torrassa", "el_prat_estacio"],
+  L11: [],
+  FM:  ["paral_lel"],
+  // ── RODALIES ─────────────────────────────────────────────────────────────
+  R1: [
+    "l_hospitalet", "sants_estacio", "passeig_de_gracia", "catalunya",
+    "arc_de_triomf", "el_clot", "badalona_rodalies", "mataro",
+  ],
+  R2: [
+    "vilanova_i_la_geltru", "sitges", "platja_castelldefels",
+    "castelldefels", "gava", "viladecans", "aeroport_t2",
+    "el_prat_estacio", "sants_estacio", "passeig_de_gracia",
+    "el_clot", "sant_andreu_rodalies", "granollers_centre",
+  ],
+  R3: [
+    "l_hospitalet", "sants_estacio", "passeig_de_gracia", "catalunya",
+    "arc_de_triomf", "la_sagrera", "fabra_i_puig",
+  ],
+  R4: [
+    "l_hospitalet", "sants_estacio", "espanya", "passeig_de_gracia",
+    "catalunya", "arc_de_triomf", "la_sagrera", "fabra_i_puig",
+    "sabadell_sud", "sabadell_centre", "sabadell_nord", "terrassa_estacio_nord",
+  ],
+  R7: [],
+  R8: ["granollers_centre", "sant_cugat", "rubi"],
+  R5: [],
+  R6: [],
+};

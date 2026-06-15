@@ -7,6 +7,7 @@ export interface StationReport {
   description: string;
   created_at: string;
   expires_at: string;
+  author_session_id?: string;
 }
 
 export type EmojiType = "like" | "dislike" | "cop" | "warning";

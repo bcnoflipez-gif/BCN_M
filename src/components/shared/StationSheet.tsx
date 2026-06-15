@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { 
   Heart, Accessibility, ArrowRightLeft, Info, 
   MessageSquare, ShieldAlert, Trash2, Send, Flag, 
@@ -34,6 +34,7 @@ export default function StationSheet({
   language
 }: StationSheetProps) {
   const [activeTab, setActiveTab] = useState<SheetTab>("info");
+  const [sheetState, setSheetState] = useState<"peek" | "expanded">("peek");
   const [comments, setComments] = useState<StationComment[]>([]);
   const [newCommentText, setNewCommentText] = useState("");
   const [commentError, setCommentError] = useState<string | null>(null);
@@ -84,21 +85,23 @@ export default function StationSheet({
     loadOverride();
     setClickedDescriptionType(null);
     setIsEditingOverride(false);
+    // Reset to peek whenever station changes
+    setSheetState("peek");
   }, [loadComments, loadOverride]);
 
 
   // Handle cooldown timers
   useEffect(() => {
     const timer = setInterval(() => {
-      const comCheck = spamProtection.checkCommentCooldown();
+      const comCheck = spamProtection.checkCommentCooldown(isAdmin);
       setCommentCooldown(comCheck.remainingSec);
 
-      const repCheck = spamProtection.checkReportCooldown();
+      const repCheck = spamProtection.checkReportCooldown(isAdmin);
       setReportCooldown(repCheck.remainingSec);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [isAdmin]);
 
   const startEditing = () => {
     setEditInfoRu(override?.info_text_ru || station?.generalInfo.infoTextRu || "");
@@ -282,21 +285,88 @@ export default function StationSheet({
     }
   };
 
-  return (
-    <div className="absolute inset-0 z-[1000] flex">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 glass-backdrop"
-        onClick={onClose} 
-      />
+  // ── Drag / swipe logic ──────────────────────────────────────────────────
+  const dragStartY = useRef<number | null>(null);
+  const dragCurrentY = useRef<number>(0);
+  const isDragging = useRef(false);
+  const SNAP_THRESHOLD = 40; // px — lower = easier to trigger
 
-      {/* Panel */}
-      <div 
-        className="relative h-full w-[85%] glass-drawer shadow-2xl flex flex-col no-scrollbar rounded-l-[32px] rounded-r-none animate-slide-in-left z-10"
+  const onPointerDown = (e: React.PointerEvent) => {
+    // Don't capture if user clicked a button — let click events through
+    const target = e.target as HTMLElement;
+    if (target.closest("button")) return;
+
+    dragStartY.current = e.clientY;
+    dragCurrentY.current = e.clientY;
+    isDragging.current = true;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!isDragging.current) return;
+    dragCurrentY.current = e.clientY;
+  };
+
+  const onPointerUp = () => {
+    if (!isDragging.current || dragStartY.current === null) return;
+    const delta = dragCurrentY.current - dragStartY.current;
+    isDragging.current = false;
+
+    if (delta < -SNAP_THRESHOLD) {
+      // Swipe UP → expand
+      setSheetState("expanded");
+    } else if (delta > SNAP_THRESHOLD) {
+      if (sheetState === "expanded") {
+        // Swipe DOWN from expanded → return to peek
+        setSheetState("peek");
+      } else {
+        // Swipe DOWN from peek → close
+        onClose();
+      }
+    }
+    dragStartY.current = null;
+  };
+  // ────────────────────────────────────────────────────────────────────────
+
+  return (
+    <div className={`absolute z-[1000] flex flex-col pointer-events-none ${
+      sheetState === "expanded" ? "inset-0" : "inset-x-0 bottom-0"
+    }`}>
+      {/* Backdrop — only in expanded mode */}
+      {sheetState === "expanded" && (
+        <div
+          className="flex-1 pointer-events-auto"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Bottom Sheet Panel */}
+      <div
+        className={`relative glass-sheet shadow-2xl flex flex-col no-scrollbar pointer-events-auto sheet-snap rounded-t-[28px] ${
+          sheetState !== "expanded" ? "animate-slide-up" : ""
+        }`}
+        style={{
+          height: sheetState === "expanded" ? "100%" : "calc(45% + 64px)",
+          paddingBottom: sheetState === "expanded" ? 0 : "64px",
+          maxHeight: sheetState === "expanded" ? "100%" : undefined,
+        }}
       >
-        {/* Header section */}
-        <div className="px-4 pt-4 pb-2 flex items-center gap-3 border-b border-[#18181b] flex-shrink-0">
-          {/* Back button */}
+        {/* Drag Handle + Header — unified swipe zone */}
+        <div
+          className="flex-shrink-0 drag-handle-zone cursor-grab active:cursor-grabbing"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
+          {/* Pill handle */}
+          <div className="flex justify-center pt-2.5 pb-2">
+            <div className="w-10 h-1 rounded-full bg-white/25" />
+          </div>
+
+          {/* Header section */}
+          <div className="px-4 pb-2 flex items-center gap-3 border-b border-[#18181b]">
+          {/* Back / close button */}
           <button 
             onClick={onClose}
             className="h-10 w-10 rounded-xl bg-[#18181b]/55 border border-[#27272a] flex items-center justify-center text-[#71717a] active:text-[#a1a1aa] active:scale-95 transition-all"
@@ -335,7 +405,8 @@ export default function StationSheet({
           >
             <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
           </button>
-        </div>
+          </div>
+        </div> {/* end drag-handle-zone */}
 
       {/* Navigation Tabs */}
       <div className="flex border-b border-[#18181b] px-2 flex-shrink-0">
@@ -794,5 +865,5 @@ export default function StationSheet({
       </div>
     </div>
   </div>
-);
+  );
 }

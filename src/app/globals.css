@@ -278,6 +278,22 @@ button, a, input, select, textarea {
   transition: all 0.2s ease;
 }
 
+/* ======= TICKER / MARQUEE ======= */
+@keyframes marquee {
+  0%   { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.ticker-track {
+  display: flex;
+  white-space: nowrap;
+  animation: marquee 22s linear infinite;
+}
+
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
 /* ======= SIDEBAR DRAWER ANIMATIONS ======= */
 @keyframes slide-in-right {
   from {
@@ -307,9 +323,7 @@ button, a, input, select, textarea {
 }
 
 .glass-drawer {
-  background: rgba(9, 9, 11, 0.82) !important;
-  backdrop-filter: blur(24px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  background: #0c0c0e !important;
   border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -330,12 +344,16 @@ button, a, input, select, textarea {
 }
 
 .glass-sheet {
-  background: rgba(12, 12, 14, 0.94);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  background: #0c0c0e;
   border-top: 1px solid rgba(255, 255, 255, 0.09);
   border-left: 1px solid rgba(255, 255, 255, 0.05);
   border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.drag-handle-zone {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .sheet-snap {

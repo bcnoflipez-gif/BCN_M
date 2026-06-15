@@ -15,7 +15,8 @@ import {
   LogOut,
   Search,
   Shield,
-  Palette
+  Palette,
+  Megaphone
 } from "lucide-react";
 import { 
   getOrCreateProfile, 
@@ -177,6 +178,22 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
   const [searchQuery, setSearchQuery] = useState("");
   const [adminLoading, setAdminLoading] = useState(false);
 
+  // Ticker editor state (admin only)
+  const [tickerText, setTickerText] = useState("");
+  const [tickerSaved, setTickerSaved] = useState(false);
+
+  const handleSaveTicker = () => {
+    const val = tickerText.trim();
+    if (!val) return;
+    try {
+      localStorage.setItem("bcn_ticker", val);
+      // Trigger StorageEvent for same-tab listeners
+      window.dispatchEvent(new StorageEvent("storage", { key: "bcn_ticker", newValue: val }));
+      setTickerSaved(true);
+      setTimeout(() => setTickerSaved(false), 2000);
+    } catch { /* noop */ }
+  };
+
   const refreshProfile = () => {
     const data = getOrCreateProfile();
     setProfile(data);
@@ -205,6 +222,11 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
     if (profile?.role === "admin") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchProfiles();
+      // Load current ticker text
+      try {
+        const saved = localStorage.getItem("bcn_ticker");
+        if (saved) setTickerText(saved);
+      } catch { /* noop */ }
     }
   }, [profile?.role]);
 
@@ -474,6 +496,39 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
                   })
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Ticker / Ad Banner Editor — Admin Only */}
+          {profile.role === "admin" && (
+            <div className="glass-card rounded-2xl p-4 border border-amber-500/20 space-y-3">
+              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Megaphone size={14} className="text-amber-500" />
+                <span>{currentLang === "ru" ? "Рекламная строка" : "Ad Ticker"}</span>
+              </h3>
+              <p className="text-[10px] text-zinc-500">
+                {currentLang === "ru"
+                  ? "Текст бегущей строки в верхней части экрана. Сохраняется локально."
+                  : "Marquee text shown at the top of the screen."}
+              </p>
+              <textarea
+                value={tickerText}
+                onChange={(e) => setTickerText(e.target.value)}
+                rows={3}
+                placeholder={currentLang === "ru" ? "Введите текст рекламы..." : "Enter ad text..."}
+                className="w-full bg-[#09090b]/60 border border-[#27272a] focus:border-amber-500/60 rounded-xl p-3 text-xs font-medium text-white placeholder-zinc-600 focus:outline-none transition-all resize-none"
+                maxLength={400}
+              />
+              <button
+                onClick={handleSaveTicker}
+                className="w-full h-10 bg-amber-600/90 hover:bg-amber-600 text-black font-extrabold rounded-xl text-xs active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              >
+                {tickerSaved ? (
+                  <><Check size={14} /><span>{currentLang === "ru" ? "Сохранено!" : "Saved!"}</span></>
+                ) : (
+                  <span>{currentLang === "ru" ? "Обновить строку" : "Update Ticker"}</span>
+                )}
+              </button>
             </div>
           )}
         </>
