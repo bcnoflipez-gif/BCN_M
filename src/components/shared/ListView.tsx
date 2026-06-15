@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Search, ShieldAlert, Clock, Accessibility, MapPin, SlidersHorizontal, X, Check } from "lucide-react";
+import { Search, ShieldAlert, Clock, Accessibility, MapPin, SlidersHorizontal } from "lucide-react";
 import { STATIONS, METRO_LINES } from "../../lib/metroData";
 import { TRANSLATIONS } from "../../lib/translations";
 import { StationReport, Language } from "../../types";
+import FilterDrawer from "./FilterDrawer";
 
 interface ListViewProps {
   activeReports: StationReport[];
@@ -17,107 +18,7 @@ type AlertFilter = "all" | "lliure" | "gossos" | "mosquits" | "pregunta" | "gori
 const METRO_LINE_IDS = Object.keys(METRO_LINES).filter(id => METRO_LINES[id].type === "metro");
 const RODALIES_LINE_IDS = Object.keys(METRO_LINES).filter(id => METRO_LINES[id].type === "rodalies");
 
-// ─── Sub-components (module-level) ───────────────────────────────────────────
 
-/** Single line pill toggle */
-function LinePill({ lineId, isChecked, onToggle }: { lineId: string; isChecked: boolean; onToggle: () => void }) {
-  const line = METRO_LINES[lineId];
-  return (
-    <button
-      onClick={onToggle}
-      className="h-7 px-2.5 rounded-lg text-[10px] font-black flex items-center gap-1.5 border transition-all duration-150 active:scale-90"
-      style={{
-        backgroundColor: isChecked ? (line?.color ?? "#52525b") : "rgba(24,24,27,0.8)",
-        color: isChecked ? (line?.textColor ?? "#fff") : "#71717a",
-        borderColor: isChecked ? "transparent" : "#27272a",
-        boxShadow: isChecked ? `0 0 10px ${line?.color ?? "#52525b"}55` : "none",
-      }}
-    >
-      <span
-        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-        style={{ backgroundColor: isChecked ? (line?.textColor ?? "#fff") : (line?.color ?? "#71717a") }}
-      />
-      {line?.name ?? lineId}
-    </button>
-  );
-}
-
-/** System block with checkbox + collapsible line grid */
-function SystemBlock({
-  systemLabel,
-  checked,
-  onToggleSystem,
-  lineIds,
-  selectedLines,
-  onToggleLine,
-  onToggleAllLines,
-  tl,
-}: {
-  systemLabel: string;
-  checked: boolean;
-  onToggleSystem: () => void;
-  lineIds: string[];
-  selectedLines: string[];
-  onToggleLine: (id: string) => void;
-  onToggleAllLines: () => void;
-  tl: typeof TRANSLATIONS["en"]["list"];
-}) {
-  const [linesOpen, setLinesOpen] = useState(false);
-  const allSelected = lineIds.every(id => selectedLines.includes(id));
-
-  return (
-    <div className="rounded-2xl border border-[#1c1c1f] overflow-hidden">
-      {/* System toggle row */}
-      <button
-        onClick={onToggleSystem}
-        className="w-full flex items-center gap-3 px-4 py-3.5 bg-[#121214]/80 active:bg-[#18181b] transition-colors"
-      >
-        <span className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 transition-all ${checked ? "bg-blue-600 border-blue-500" : "bg-[#18181b] border-[#3f3f46]"}`}>
-          {checked && <Check size={11} className="text-white" />}
-        </span>
-        <span className={`text-[13px] font-extrabold tracking-tight ${checked ? "text-white" : "text-zinc-500"}`}>{systemLabel}</span>
-      </button>
-
-      {/* Lines accordion */}
-      {checked && (
-        <>
-          <button
-            onClick={() => setLinesOpen(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-2 bg-[#0c0c0e]/60 border-t border-[#1c1c1f] active:bg-[#121214] transition-colors"
-          >
-            <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest">
-              {tl.lines} ({selectedLines.length}/{lineIds.length})
-            </span>
-            <span className="text-[10px] text-zinc-600">{linesOpen ? "▲" : "▼"}</span>
-          </button>
-
-          {linesOpen && (
-            <div className="px-4 pb-4 pt-3 bg-[#0c0c0e]/40 border-t border-[#1c1c1f] space-y-3">
-              {/* Toggle All */}
-              <button
-                onClick={onToggleAllLines}
-                className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 active:scale-95 transition-all"
-              >
-                <span className={`w-4 h-4 rounded border flex items-center justify-center transition-all flex-shrink-0 ${allSelected ? "bg-blue-600 border-blue-500" : "bg-[#18181b] border-[#3f3f46]"}`}>
-                  {allSelected && <Check size={9} className="text-white" />}
-                </span>
-                <span>{allSelected ? tl.clearAll : tl.selectAll}</span>
-                <span className="text-zinc-600">({selectedLines.length}/{lineIds.length})</span>
-              </button>
-
-              {/* Line pills */}
-              <div className="flex flex-wrap gap-2">
-                {lineIds.map(id => (
-                  <LinePill key={id} lineId={id} isChecked={selectedLines.includes(id)} onToggle={() => onToggleLine(id)} />
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
 
 /** Alert type checkbox row */
 function AlertChip({
@@ -172,7 +73,7 @@ function LineStripes({ lineIds }: { lineIds: string[] }) {
 
 export default function ListView({ activeReports, onSelectStation, language }: ListViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [alertFilter, setAlertFilter] = useState<AlertFilter>("all");
+  const [selectedWarnings, setSelectedWarnings] = useState<string[]>([]);
   const [showMetro, setShowMetro] = useState(true);
   const [showRodalies, setShowRodalies] = useState(true);
   const [selectedMetroLines, setSelectedMetroLines] = useState<string[]>(METRO_LINE_IDS);
@@ -182,9 +83,45 @@ export default function ListView({ activeReports, onSelectStation, language }: L
   const t = TRANSLATIONS[language];
   const tl = t.list;
 
+  const selectedSystems = useMemo(() => {
+    return [showMetro && "metro", showRodalies && "rodalies"].filter(Boolean) as string[];
+  }, [showMetro, showRodalies]);
+
+  const handleToggleSystem = (system: string) => {
+    if (system === "metro") {
+      setShowMetro(prev => !prev);
+    } else if (system === "rodalies") {
+      setShowRodalies(prev => !prev);
+    }
+  };
+
+  const selectedLinesCombined = useMemo(() => {
+    return [...selectedMetroLines, ...selectedRodaliesLines];
+  }, [selectedMetroLines, selectedRodaliesLines]);
+
+  const handleToggleLine = (lineId: string) => {
+    const isMetro = METRO_LINE_IDS.includes(lineId);
+    toggleLine(lineId, isMetro);
+  };
+
+  const handleToggleAllLines = (lineIds: string[], selectAll: boolean) => {
+    const isMetro = lineIds.some(id => METRO_LINE_IDS.includes(id));
+    if (isMetro) {
+      setSelectedMetroLines(selectAll ? METRO_LINE_IDS : []);
+    } else {
+      setSelectedRodaliesLines(selectAll ? RODALIES_LINE_IDS : []);
+    }
+  };
+
+  const handleToggleWarning = (warningId: string) => {
+    setSelectedWarnings(prev =>
+      prev.includes(warningId) ? prev.filter(w => w !== warningId) : [...prev, warningId]
+    );
+  };
+
   // Number of non-default active filters
   const activeFilterCount = [
-    alertFilter !== "all",
+    selectedWarnings.length > 0,
     !showMetro,
     !showRodalies,
     selectedMetroLines.length < METRO_LINE_IDS.length,
@@ -211,14 +148,8 @@ export default function ListView({ activeReports, onSelectStation, language }: L
     }
   };
 
-  // Bidirectional toggle: if all selected → clear all; otherwise → select all
-  const toggleAllMetroLines = () =>
-    setSelectedMetroLines(prev => prev.length === METRO_LINE_IDS.length ? [] : METRO_LINE_IDS);
-  const toggleAllRodaliesLines = () =>
-    setSelectedRodaliesLines(prev => prev.length === RODALIES_LINE_IDS.length ? [] : RODALIES_LINE_IDS);
-
   const resetFilters = () => {
-    setAlertFilter("all");
+    setSelectedWarnings([]);
     setShowMetro(true);
     setShowRodalies(true);
     setSelectedMetroLines(METRO_LINE_IDS);
@@ -228,12 +159,12 @@ export default function ListView({ activeReports, onSelectStation, language }: L
   const baseFiltered = useMemo(() => {
     return STATIONS.filter(station => {
       if (searchQuery && !station.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      if (alertFilter !== "all") {
-        if (!activeReports.some(r => r.station_id === station.id && r.type === alertFilter)) return false;
+      if (selectedWarnings.length > 0) {
+        if (!activeReports.some(r => r.station_id === station.id && selectedWarnings.includes(r.type))) return false;
       }
       return true;
     });
-  }, [searchQuery, alertFilter, activeReports]);
+  }, [searchQuery, selectedWarnings, activeReports]);
 
   const metroStations = useMemo(() => {
     if (!showMetro) return [];
@@ -296,6 +227,7 @@ export default function ListView({ activeReports, onSelectStation, language }: L
               <span title={t.common.yes}><Accessibility size={12} className="text-blue-400" /></span>
             )}
           </div>
+
           <div className="flex flex-wrap gap-1">
             {station.lines.map(lineId => {
               const line = METRO_LINES[lineId];
@@ -364,8 +296,14 @@ export default function ListView({ activeReports, onSelectStation, language }: L
           {alertChips.map(chip => (
             <AlertChip
               key={chip.id}
-              isActive={alertFilter === chip.id}
-              onClick={() => setAlertFilter(chip.id)}
+              isActive={chip.id === "all" ? selectedWarnings.length === 0 : selectedWarnings.includes(chip.id)}
+              onClick={() => {
+                if (chip.id === "all") {
+                  setSelectedWarnings([]);
+                } else {
+                  setSelectedWarnings([chip.id]);
+                }
+              }}
               label={chip.label}
               color={chip.color}
             />
@@ -407,117 +345,21 @@ export default function ListView({ activeReports, onSelectStation, language }: L
         )}
       </div>
 
-      {/* ─── Filter bottom sheet ─── */}
-      {filterSheetOpen && (
-        <div className="absolute inset-0 z-[800] flex flex-col justify-end">
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setFilterSheetOpen(false)} />
-
-          {/* Sheet */}
-          <div className="relative bg-[#09090b] border-t border-x border-[#1c1c1f] rounded-t-3xl max-h-[82vh] flex flex-col shadow-[0_-8px_40px_rgba(0,0,0,0.7)]">
-            {/* Drag handle */}
-            <div className="w-10 h-1 rounded-full bg-[#27272a] mx-auto mt-3 mb-1 flex-shrink-0" />
-
-            {/* Header */}
-            <div className="px-5 py-3 border-b border-[#1c1c1f] flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <SlidersHorizontal size={15} className="text-blue-400" />
-                <span className="font-extrabold text-sm text-white">{tl.filters}</span>
-                {activeFilterCount > 0 && (
-                  <span className="h-4 w-4 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {activeFilterCount > 0 && (
-                  <button
-                    onClick={resetFilters}
-                    className="text-[11px] text-blue-400 font-bold border border-blue-500/20 bg-blue-500/5 px-3 py-1 rounded-lg active:scale-95 transition-all"
-                  >
-                    {tl.reset}
-                  </button>
-                )}
-                <button
-                  onClick={() => setFilterSheetOpen(false)}
-                  className="h-8 w-8 rounded-xl bg-[#1c1c1f] flex items-center justify-center text-zinc-400 active:scale-90 transition-all"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-            </div>
-
-            {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-4">
-
-              {/* Alert type filter section */}
-              <div className="space-y-2.5">
-                <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest">
-                  {t.report.labelType}
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {alertChips.map(chip => (
-                    <AlertChip
-                      key={chip.id}
-                      isActive={alertFilter === chip.id}
-                      onClick={() => setAlertFilter(chip.id)}
-                      label={chip.label}
-                      color={chip.color}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Divider */}
-              <div className="border-t border-[#1c1c1f]" />
-
-              {/* Metro system + lines */}
-              <div className="space-y-2">
-                <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest">
-                  {t.common.metro}
-                </span>
-                <SystemBlock
-                  systemLabel={tl.metroSystem}
-                  checked={showMetro}
-                  onToggleSystem={() => setShowMetro(v => !v)}
-                  lineIds={METRO_LINE_IDS}
-                  selectedLines={selectedMetroLines}
-                  onToggleLine={id => toggleLine(id, true)}
-                  onToggleAllLines={toggleAllMetroLines}
-                  tl={tl}
-                />
-              </div>
-
-              {/* Rodalies system + lines */}
-              <div className="space-y-2">
-                <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest">
-                  {t.common.rodalies}
-                </span>
-                <SystemBlock
-                  systemLabel={tl.rodaliesSystem}
-                  checked={showRodalies}
-                  onToggleSystem={() => setShowRodalies(v => !v)}
-                  lineIds={RODALIES_LINE_IDS}
-                  selectedLines={selectedRodaliesLines}
-                  onToggleLine={id => toggleLine(id, false)}
-                  onToggleAllLines={toggleAllRodaliesLines}
-                  tl={tl}
-                />
-              </div>
-            </div>
-
-            {/* Apply button */}
-            <div className="p-5 border-t border-[#1c1c1f] flex-shrink-0">
-              <button
-                onClick={() => setFilterSheetOpen(false)}
-                className="w-full h-12 bg-blue-600 text-white rounded-xl text-xs font-extrabold active:scale-95 transition-all shadow-[0_4px_20px_rgba(59,130,246,0.35)]"
-              >
-                {tl.show} ({totalVisible})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <FilterDrawer
+        isOpen={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        language={language}
+        selectedSystems={selectedSystems}
+        onToggleSystem={handleToggleSystem}
+        selectedLines={selectedLinesCombined}
+        onToggleLine={handleToggleLine}
+        onToggleAllLines={handleToggleAllLines}
+        selectedWarnings={selectedWarnings}
+        onToggleWarning={handleToggleWarning}
+        onResetFilters={resetFilters}
+        totalVisibleCount={totalVisible}
+      />
     </div>
   );
 }
+

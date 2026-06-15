@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "../components/shared/ServiceWorkerRegister";
+import { ThemeScript } from "../components/shared/ThemeScript";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -79,12 +80,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="BCN Metro" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="format-detection" content="telephone=no" />
-        {/* Theme restore — blocking inline script must run before paint */}
-        {/* suppressHydrationWarning on <head> silences React's script-in-component warning */}
-        <script
-          suppressHydrationWarning
-          dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('bcn-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}` }}
-        />
+        {/* Theme restore — blocking inline script runs before paint without React 19 warning */}
+        <ThemeScript />
       </head>
       <body className="h-full flex flex-col overflow-hidden" suppressHydrationWarning>
         {children}

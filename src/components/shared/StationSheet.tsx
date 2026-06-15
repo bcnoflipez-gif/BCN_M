@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { 
-  X, Heart, Accessibility, ArrowRightLeft, Info, 
+  Heart, Accessibility, ArrowRightLeft, Info, 
   MessageSquare, ShieldAlert, Trash2, Send, Flag, 
   User, Clock, AlertTriangle, Users, HelpCircle, 
-  Smile
+  Smile, ArrowLeft
 } from "lucide-react";
 import { Station, METRO_LINES } from "../../lib/metroData";
 import { StationComment, StationReport, ReportType, EmojiType, Language, StationOverride } from "../../types";
@@ -283,57 +283,59 @@ export default function StationSheet({
   };
 
   return (
-    <div 
-      className="absolute bottom-0 left-0 right-0 z-[1000] glass-panel rounded-t-2xl shadow-[0_-8px_30px_rgb(0,0,0,0.5)] transition-all duration-300 ease-out border-t border-[#27272a] flex flex-col no-scrollbar"
-      style={{ height: "60vh", maxHeight: "550px" }}
-    >
-      {/* Handlebar for visual drag indicator */}
-      <div className="w-12 h-1 bg-[#27272a] rounded-full mx-auto my-3 flex-shrink-0" />
+    <div className="absolute inset-0 z-[1000] flex">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 glass-backdrop"
+        onClick={onClose} 
+      />
 
-      {/* Header section */}
-      <div className="px-4 pb-2 flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            {station.lines.map(lineId => {
-              const line = METRO_LINES[lineId];
-              return (
-                <span 
-                  key={lineId}
-                  className="px-2 py-0.5 rounded text-[10px] font-bold shadow-sm"
-                  style={{ backgroundColor: line?.color || "#52525b", color: line?.textColor || "#fff" }}
-                >
-                  {line?.name || lineId}
-                </span>
-              );
-            })}
+      {/* Panel */}
+      <div 
+        className="relative h-full w-[85%] glass-drawer shadow-2xl flex flex-col no-scrollbar rounded-l-[32px] rounded-r-none animate-slide-in-left z-10"
+      >
+        {/* Header section */}
+        <div className="px-4 pt-4 pb-2 flex items-center gap-3 border-b border-[#18181b] flex-shrink-0">
+          {/* Back button */}
+          <button 
+            onClick={onClose}
+            className="h-10 w-10 rounded-xl bg-[#18181b]/55 border border-[#27272a] flex items-center justify-center text-[#71717a] active:text-[#a1a1aa] active:scale-95 transition-all"
+            aria-label={t.common.close}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-black text-white tracking-tight truncate">{station.name}</h2>
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {station.lines.map(lineId => {
+                const line = METRO_LINES[lineId];
+                return (
+                  <span 
+                    key={lineId}
+                    className="px-1.5 py-0.5 rounded text-[8px] font-black"
+                    style={{ backgroundColor: line?.color || "#52525b", color: line?.textColor || "#fff" }}
+                  >
+                    {line?.name || lineId}
+                  </span>
+                );
+              })}
+            </div>
           </div>
-          <h2 className="text-xl font-extrabold text-white tracking-tight">{station.name}</h2>
-        </div>
 
-        <div className="flex items-center gap-2">
           {/* Favorite Toggle button */}
           <button 
             onClick={onToggleFavorite}
-            className={`h-11 w-11 rounded-full flex items-center justify-center border active:scale-95 transition-all duration-200 ${
+            className={`h-10 w-10 rounded-xl flex items-center justify-center border active:scale-95 transition-all duration-200 ${
               isFavorite 
                 ? "bg-red-500/10 border-red-500/30 text-red-500" 
                 : "bg-[#18181b]/55 border-[#27272a] text-[#71717a] active:text-[#a1a1aa]"
             }`}
             aria-label={t.station.favoriteBtn}
           >
-            <Heart size={20} fill={isFavorite ? "currentColor" : "none"} />
-          </button>
-
-          {/* Close button */}
-          <button 
-            onClick={onClose}
-            className="h-11 w-11 rounded-full bg-[#18181b]/55 border border-[#27272a] flex items-center justify-center text-[#71717a] active:text-[#a1a1aa] active:scale-95 transition-all"
-            aria-label={t.common.close}
-          >
-            <X size={20} />
+            <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
           </button>
         </div>
-      </div>
 
       {/* Navigation Tabs */}
       <div className="flex border-b border-[#18181b] px-2 flex-shrink-0">
@@ -791,5 +793,6 @@ export default function StationSheet({
         )}
       </div>
     </div>
-  );
+  </div>
+);
 }
