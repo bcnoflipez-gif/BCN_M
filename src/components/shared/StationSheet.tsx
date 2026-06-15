@@ -90,18 +90,21 @@ export default function StationSheet({
   }, [loadComments, loadOverride]);
 
 
+  // Stable ref for isAdmin so the interval callback always reads latest value
+  // without changing the deps array size (which caused the React crash)
+  const isAdminRef = useRef(isAdmin);
+  useEffect(() => { isAdminRef.current = isAdmin; }, [isAdmin]);
+
   // Handle cooldown timers
   useEffect(() => {
     const timer = setInterval(() => {
-      const comCheck = spamProtection.checkCommentCooldown(isAdmin);
+      const comCheck = spamProtection.checkCommentCooldown(isAdminRef.current);
       setCommentCooldown(comCheck.remainingSec);
-
-      const repCheck = spamProtection.checkReportCooldown(isAdmin);
+      const repCheck = spamProtection.checkReportCooldown(isAdminRef.current);
       setReportCooldown(repCheck.remainingSec);
     }, 1000);
-
     return () => clearInterval(timer);
-  }, [isAdmin]);
+  }, []); // stable — never changes size
 
   const startEditing = () => {
     setEditInfoRu(override?.info_text_ru || station?.generalInfo.infoTextRu || "");
