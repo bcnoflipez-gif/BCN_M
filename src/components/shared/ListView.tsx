@@ -326,7 +326,7 @@ export default function ListView({
 
 
   return (
-    <div className="flex-1 flex flex-col pb-20 overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* ─── Search + filter button ─── */}
       <div className="px-4 pt-4 pb-2 flex gap-2 flex-shrink-0">
@@ -336,6 +336,10 @@ export default function ListView({
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
+            onBlur={() => {
+              window.scrollTo(0, 0);
+              document.body.scrollTop = 0;
+            }}
             placeholder={t.common.search}
             className="w-full h-11 bg-[#18181b] border border-[#27272a] rounded-xl pl-9 pr-4 text-xs text-[#fafafa] placeholder-[#71717a] focus:outline-none focus:border-blue-500/60"
           />

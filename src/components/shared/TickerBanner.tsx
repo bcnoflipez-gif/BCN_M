@@ -11,15 +11,16 @@ interface TickerBannerProps {
 }
 
 export default function TickerBanner({ activeAlertsCount: _ignored }: TickerBannerProps) {
-  const [text, setText] = useState(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("bcn_ticker");
-        if (saved && saved.trim()) return saved;
-      } catch { /* noop */ }
-    }
-    return DEFAULT_TICKER;
-  });
+  const [text, setText] = useState(DEFAULT_TICKER);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("bcn_ticker");
+      if (saved && saved.trim()) {
+        setText(saved);
+      }
+    } catch { /* noop */ }
+  }, []);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -32,7 +33,7 @@ export default function TickerBanner({ activeAlertsCount: _ignored }: TickerBann
   return (
     <div
       className="w-full overflow-hidden bg-[#0c0c0e] border-b border-white/[0.06] flex-shrink-0"
-      style={{ height: "36px" }}
+      style={{ height: "calc(36px + env(safe-area-inset-top, 0px))", paddingTop: "env(safe-area-inset-top, 0px)" }}
       aria-label="Ticker"
     >
       <div className="flex items-center h-full">

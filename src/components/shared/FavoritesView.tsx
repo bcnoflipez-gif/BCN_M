@@ -45,7 +45,7 @@ export default function FavoritesView({
   };
 
   return (
-    <div className="flex-1 flex flex-col p-4 pb-20 no-scrollbar overflow-y-auto">
+    <div className="flex-1 flex flex-col p-4 no-scrollbar overflow-y-auto">
       {/* Title */}
       <div className="mb-4 flex-shrink-0">
         <h2 className="text-xl font-extrabold text-white tracking-tight">{t.tabs.favorites}</h2>

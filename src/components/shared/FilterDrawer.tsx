@@ -98,6 +98,17 @@ function SystemBlock({
 
           {linesOpen && (
             <div className="px-4 pb-4 pt-3 bg-black/10 border-t border-white/5 space-y-3">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onBlur={() => {
+                  window.scrollTo(0, 0);
+                  document.body.scrollTop = 0;
+                }}
+                placeholder={t.common.search}
+                className="w-full bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/85 rounded-xl pl-3 pr-3 py-2.5 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
+              />
               {/* Toggle All */}
               <button
                 onClick={() => onToggleAllLines(lineIds, !allSelected)}

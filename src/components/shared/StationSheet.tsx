@@ -414,13 +414,11 @@ export default function StationSheet({
   // ────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`absolute z-[1000] flex flex-col pointer-events-none ${
-      sheetState === "expanded" ? "inset-0" : "inset-x-0 bottom-0"
-    }`}>
+    <div className="absolute inset-0 z-[1000] flex flex-col justify-end pointer-events-none">
       {/* Backdrop — only in expanded mode */}
       {sheetState === "expanded" && (
         <div
-          className="flex-1 pointer-events-auto"
+          className="absolute inset-0 pointer-events-auto"
           onClick={onClose}
         />
       )}
@@ -432,7 +430,7 @@ export default function StationSheet({
         }`}
         style={{
           height: sheetState === "expanded" ? "100%" : "calc(45% + 64px)",
-          paddingBottom: sheetState === "expanded" ? 0 : "64px",
+          paddingBottom: sheetState === "expanded" ? "env(safe-area-inset-bottom, 0px)" : "calc(64px + env(safe-area-inset-bottom, 0px))",
           maxHeight: sheetState === "expanded" ? "100%" : undefined,
         }}
       >
@@ -546,6 +544,10 @@ export default function StationSheet({
                 <textarea
                   value={editInfoRu}
                   onChange={(e) => setEditInfoRu(e.target.value)}
+                  onBlur={() => {
+                    window.scrollTo(0, 0);
+                    document.body.scrollTop = 0;
+                  }}
                   rows={3}
                   className="w-full bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/85 rounded-xl p-3 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
                   required
@@ -559,6 +561,10 @@ export default function StationSheet({
                 <textarea
                   value={editInfoEn}
                   onChange={(e) => setEditInfoEn(e.target.value)}
+                  onBlur={() => {
+                    window.scrollTo(0, 0);
+                    document.body.scrollTop = 0;
+                  }}
                   rows={3}
                   className="w-full bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/85 rounded-xl p-3 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
                   required
@@ -573,6 +579,10 @@ export default function StationSheet({
                   type="url"
                   value={editPhotoUrl}
                   onChange={(e) => setEditPhotoUrl(e.target.value)}
+                  onBlur={() => {
+                    window.scrollTo(0, 0);
+                    document.body.scrollTop = 0;
+                  }}
                   placeholder="https://example.com/photo.jpg"
                   className="w-full h-11 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/85 rounded-xl px-3.5 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
                 />
@@ -941,6 +951,10 @@ export default function StationSheet({
                       onChange={(e) => {
                         setNewCommentText(e.target.value);
                         setCommentError(null);
+                      }}
+                      onBlur={() => {
+                        window.scrollTo(0, 0);
+                        document.body.scrollTop = 0;
                       }}
                       placeholder={
                         commentCooldown > 0 

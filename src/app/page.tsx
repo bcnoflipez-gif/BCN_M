@@ -254,7 +254,10 @@ export default function Home() {
       <TopHeader activeAlertsCount={activeReports.length} />
 
       {/* Main Tab Views */}
-      <main className="flex-1 relative flex flex-col min-h-0 bg-[#09090b]">
+      <main 
+        className="flex-1 relative flex flex-col min-h-0 bg-[#09090b]"
+        style={{ paddingBottom: 'calc(52px + env(safe-area-inset-bottom, 0px))' }}
+      >
         {/* TAB 1: MAP */}
         <div className={`absolute inset-0 flex flex-col ${activeTab === "map" ? "visible" : "invisible pointer-events-none"}`}>
           {/* Smart Filter Floating Toggle — matches List tab style */}
