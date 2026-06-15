@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { SlidersHorizontal, ArrowLeft, Check, PawPrint, EyeOff, HelpCircle, Shield, CheckCircle2, Clock, Users, AlertTriangle } from "lucide-react";
+import { SlidersHorizontal, ArrowLeft, Check, PawPrint, HelpCircle, Shield, CheckCircle2, Clock, Lock } from "lucide-react";
 import { METRO_LINES } from "../../lib/metroData";
 import { TRANSLATIONS, TranslationSchema } from "../../lib/translations";
 import { Language } from "../../types";
@@ -152,13 +152,11 @@ export default function FilterDrawer({
 
   const warningChips = [
     { id: "gossos", label: language === "ru" ? "Gossos (Собаки)" : "Gossos", icon: PawPrint, colorClass: "border-red-500/30 text-red-400 bg-red-950/20", defaultClass: "border-white/5 text-zinc-400 bg-black/20" },
-    { id: "mosquits", label: language === "ru" ? "Mosquits (Гражд.)" : "Mosquits", icon: EyeOff, colorClass: "border-red-500/30 text-red-400 bg-red-950/20", defaultClass: "border-white/5 text-zinc-400 bg-black/20" },
     { id: "pregunta", label: language === "ru" ? "Pregunta (Опрос)" : "Pregunta", icon: HelpCircle, colorClass: "border-amber-500/30 text-amber-400 bg-amber-950/20", defaultClass: "border-white/5 text-zinc-400 bg-black/20" },
     { id: "gorilles", label: language === "ru" ? "Gorilles (Охрана)" : "Goril·les", icon: Shield, colorClass: "border-red-500/30 text-red-400 bg-red-950/20", defaultClass: "border-white/5 text-zinc-400 bg-black/20" },
     { id: "lliure", label: language === "ru" ? "Lliure (Чисто)" : "Lliure", icon: CheckCircle2, colorClass: "border-emerald-500/30 text-emerald-400 bg-emerald-950/20", defaultClass: "border-white/5 text-zinc-400 bg-black/20" },
     { id: "delay", label: language === "ru" ? "Retraso (Задержка)" : "Delay", icon: Clock, colorClass: "border-amber-500/30 text-amber-400 bg-amber-950/20", defaultClass: "border-white/5 text-zinc-400 bg-black/20" },
-    { id: "crowd", label: language === "ru" ? "Crowd (Толпа)" : "Crowd", icon: Users, colorClass: "border-cyan-500/30 text-cyan-400 bg-cyan-950/20", defaultClass: "border-white/5 text-zinc-400 bg-black/20" },
-    { id: "security", label: language === "ru" ? "Theft (Вор)" : "Theft", icon: AlertTriangle, colorClass: "border-purple-500/30 text-purple-400 bg-purple-950/20", defaultClass: "border-white/5 text-zinc-400 bg-black/20" }
+    { id: "closed", label: language === "ru" ? "Closed (Закрыто)" : (language === "es" ? "Cerrado" : (language === "fr" ? "Fermé" : "Closed")), icon: Lock, colorClass: "border-red-500/30 text-red-400 bg-red-950/20", defaultClass: "border-white/5 text-zinc-400 bg-black/20" }
   ];
 
   return (

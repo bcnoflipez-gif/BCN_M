@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { 
   Send, 
   MessageSquare, 
@@ -24,6 +24,7 @@ import { StationReport, Language } from "../types";
 import { dbService, getOrCreateProfile } from "../lib/db";
 import { parseTelegramMessage } from "../lib/telegramParser";
 import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
+import { TRANSLATIONS } from "../lib/translations";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>("map");
@@ -52,9 +53,7 @@ export default function Home() {
   // User Role State
   const [userRole, setUserRole] = useState<"user" | "admin">("user");
 
-  // Map layer quick-toggle (Google Maps style)
-  type MapLayer = "all" | "metro" | "rodalies" | "none";
-  const [mapLayer, setMapLayer] = useState<MapLayer>("all");
+  const t = TRANSLATIONS[language];
 
   // Initial loads & setup Supabase Realtime subscriptions
   useEffect(() => {
@@ -132,15 +131,14 @@ export default function Home() {
     setFavoriteIds(favs);
   }
 
-  const handleSelectStation = (stationId: string) => {
+  const handleSelectStation = useCallback((stationId: string) => {
     setSelectedStationId(stationId);
-    // No tab switch — sheet appears over current tab
-  };
+  }, []);
 
-  const handleToggleFavorite = (stationId: string) => {
+  const handleToggleFavorite = useCallback((stationId: string) => {
     const updated = dbService.toggleFavorite(stationId);
     setFavoriteIds(updated);
-  };
+  }, []);
 
   const handleSimulateTelegram = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,37 +183,37 @@ export default function Home() {
     }
   };
 
-  const toggleLineFilter = (lineId: string) => {
-    setSelectedLines(prev => 
+  const toggleLineFilter = useCallback((lineId: string) => {
+    setSelectedLines(prev =>
       prev.includes(lineId) ? prev.filter(id => id !== lineId) : [...prev, lineId]
     );
-  };
+  }, []);
 
-  const toggleSystemFilter = (system: string) => {
-    setSelectedSystems(prev => 
+  const toggleSystemFilter = useCallback((system: string) => {
+    setSelectedSystems(prev =>
       prev.includes(system) ? prev.filter(s => s !== system) : [...prev, system]
     );
-  };
+  }, []);
 
-  const toggleWarningFilter = (type: string) => {
-    setSelectedWarnings(prev => 
+  const toggleWarningFilter = useCallback((type: string) => {
+    setSelectedWarnings(prev =>
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
-  };
+  }, []);
 
-  const selectAllFilters = () => {
+  const selectAllFilters = useCallback(() => {
     setSelectedSystems(["metro", "rodalies"]);
     setSelectedLines(Object.keys(METRO_LINES));
     setSelectedWarnings([]);
-  };
+  }, []);
 
-  const handleToggleAllLines = (lineIds: string[], selectAll: boolean) => {
+  const handleToggleAllLines = useCallback((lineIds: string[], selectAll: boolean) => {
     if (selectAll) {
       setSelectedLines(prev => [...new Set([...prev, ...lineIds])]);
     } else {
       setSelectedLines(prev => prev.filter(id => !lineIds.includes(id)));
     }
-  };
+  }, []);
 
   const visibleStationsCount = React.useMemo(() => {
     return STATIONS.filter(s => {
@@ -235,6 +233,8 @@ export default function Home() {
       return true;
     }).length;
   }, [selectedSystems, selectedLines, selectedWarnings, activeReports]);
+
+  const isAdmin = userRole === "admin";
 
   const currentSelectedStation = STATIONS.find(s => s.id === selectedStationId) || null;
 
@@ -262,7 +262,7 @@ export default function Home() {
             <button
               onClick={() => setIsFilterOpen(true)}
               className="relative h-11 w-11 rounded-xl bg-[#18181b] border border-[#27272a] flex items-center justify-center flex-shrink-0 active:scale-95 transition-all shadow-lg"
-              aria-label={language === "ru" ? "Фильтры" : language === "es" ? "Filtros" : language === "fr" ? "Filtres" : "Filters"}
+              aria-label={t.map.filters}
             >
               <SlidersHorizontal size={17} className={selectedWarnings.length > 0 || selectedLines.length < Object.keys(METRO_LINES).length || selectedSystems.length < 2 ? "text-blue-400" : "text-zinc-500"} />
               {(selectedWarnings.length > 0 || selectedLines.length < Object.keys(METRO_LINES).length || selectedSystems.length < 2) && (
@@ -280,16 +280,10 @@ export default function Home() {
             selectedStationId={selectedStationId}
             onSelectStation={handleSelectStation}
             selectedLines={selectedLines}
-            selectedSystems={
-              mapLayer === "all" ? selectedSystems
-              : mapLayer === "metro" ? ["metro"]
-              : mapLayer === "rodalies" ? ["rodalies"]
-              : [] // none
-            }
+            selectedSystems={selectedSystems}
             selectedWarnings={selectedWarnings}
             language={language}
-            isAdmin={userRole === "admin"}
-            mapLayer={mapLayer}
+            isAdmin={isAdmin}
           />
 
           {/* Floating Action Button for Telegram Simulator */}
@@ -303,28 +297,6 @@ export default function Home() {
             </button>
           )}
 
-          {/* Google Maps-style layer chips */}
-          <div className="absolute bottom-24 left-4 z-[900] flex gap-1.5">
-            {([
-              { id: "all",      label: language === "ru" ? "Все" : "All" },
-              { id: "metro",    label: "Metro" },
-              { id: "rodalies", label: "Rodalies" },
-              { id: "none",     label: language === "ru" ? "Скрыть" : "Hide" },
-            ] as { id: MapLayer; label: string }[]).map(chip => (
-              <button
-                key={chip.id}
-                onClick={() => setMapLayer(chip.id)}
-                className={`h-8 px-3 rounded-full text-[11px] font-bold transition-all active:scale-95 border shadow-lg ${
-                  mapLayer === chip.id
-                    ? "bg-white text-[#09090b] border-white"
-                    : "bg-[#09090b]/90 text-zinc-400 border-[#27272a]"
-                }`}
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
-
         </div>
 
         {/* TAB 2: LIST */}
@@ -333,6 +305,8 @@ export default function Home() {
             activeReports={activeReports}
             onSelectStation={handleSelectStation}
             language={language}
+            favoriteIds={favoriteIds}
+            onToggleFavorite={handleToggleFavorite}
           />
         )}
 
@@ -473,7 +447,6 @@ export default function Home() {
       <BottomNav
         activeTab={activeTab}
         onChangeTab={setActiveTab}
-        favoritesCount={favoriteIds.length}
         language={language}
       />
     </MobileLayout>

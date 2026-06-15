@@ -8,11 +8,10 @@ export type TabId = "map" | "list" | "favorites" | "profile";
 interface BottomNavProps {
   activeTab: TabId;
   onChangeTab: (tab: TabId) => void;
-  favoritesCount: number;
   language: Language;
 }
 
-export default function BottomNav({ activeTab, onChangeTab, favoritesCount, language }: BottomNavProps) {
+export default function BottomNav({ activeTab, onChangeTab, language }: BottomNavProps) {
   const t = TRANSLATIONS[language] || TRANSLATIONS.ru;
   const navItems = [
     { id: "map" as TabId, label: t.tabs.map, icon: Map },
@@ -21,7 +20,6 @@ export default function BottomNav({ activeTab, onChangeTab, favoritesCount, lang
       id: "favorites" as TabId,
       label: t.tabs.favorites,
       icon: Heart,
-      badge: favoritesCount > 0 ? favoritesCount : undefined,
     },
     { id: "profile" as TabId, label: t.tabs.profile, icon: User },
   ];
@@ -52,11 +50,6 @@ export default function BottomNav({ activeTab, onChangeTab, favoritesCount, lang
                     isActive ? "scale-110 stroke-[2.25]" : "stroke-[1.75]"
                   }`}
                 />
-                {item.badge !== undefined && (
-                  <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center animate-pulse">
-                    {item.badge}
-                  </span>
-                )}
               </div>
               <span className="text-[10px] mt-1 tracking-wide">{item.label}</span>
             </button>

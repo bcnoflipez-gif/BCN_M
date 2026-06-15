@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from "./supabaseClient";
-import { StationReport, StationComment, ReportType, EmojiType, UserProfile, Language, StationOverride } from "../types";
+import { StationReport, StationComment, ReportType, EmojiType, UserProfile, Language, StationOverride, UserProfileCard, ProfileReactionType } from "../types";
 
 // Helper: Get the timestamp of the most recent 5:00 AM reset
 export function getLastFiveAM(): Date {
@@ -27,6 +27,9 @@ const KEYS = {
   PROFILE: "bcn_metro_profile",
 };
 
+// Public profile registry — allows looking up any user's public data by session ID
+const USER_REGISTRY_KEY = "bcn_user_registry";
+
 // Helper: Get or create anonymous session ID & profile
 export function getOrCreateProfile(): UserProfile {
   if (typeof window === "undefined") {
@@ -40,6 +43,11 @@ export function getOrCreateProfile(): UserProfile {
       role: "user",
     };
   }
+
+  try {
+    localStorage.removeItem("bcn_soft_ban_until");
+    localStorage.removeItem("bcn_my_flag_count");
+  } catch { /* noop */ }
 
   const stored = localStorage.getItem(KEYS.PROFILE);
   if (stored) {
@@ -77,24 +85,42 @@ export function getOrCreateProfile(): UserProfile {
   return newProfile;
 }
 
+// ── User Registry — public profile lookup for any session ID ──────────────
+function updateUserRegistry(profile: UserProfile): void {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem(USER_REGISTRY_KEY) || "{}";
+    const registry = JSON.parse(raw) as Record<string, UserProfileCard>;
+    registry[profile.device_session_id] = {
+      device_session_id: profile.device_session_id,
+      username: profile.username,
+      created_at: profile.created_at,
+      reports_count: profile.reports_count,
+      comments_count: profile.comments_count,
+      flags_received: profile.flags_received,
+      avatar_url: profile.avatar_url,
+      bio: profile.bio,
+      social_instagram: profile.social_instagram,
+      social_telegram: profile.social_telegram,
+      social_twitter: profile.social_twitter,
+    };
+    localStorage.setItem(USER_REGISTRY_KEY, JSON.stringify(registry));
+  } catch { /* noop */ }
+}
+
 export function updateProfileUsername(newUsername: string): UserProfile {
   const profile = getOrCreateProfile();
   profile.username = newUsername.trim() || profile.username;
   if (typeof window !== "undefined") {
     localStorage.setItem(KEYS.PROFILE, JSON.stringify(profile));
   }
+  updateUserRegistry(profile);
 
-  // Sync to Supabase if logged in
   if (profile.is_logged_in && isSupabaseConfigured && supabase) {
-    supabase
-      .from("profiles")
-      .update({ username: profile.username })
+    supabase.from("profiles").update({ username: profile.username })
       .eq("id", profile.device_session_id)
-      .then(({ error }) => {
-        if (error) console.error("Supabase sync username error:", error);
-      });
+      .then(({ error }) => { if (error) console.error("Supabase sync username error:", error); });
   }
-
   return profile;
 }
 
@@ -104,18 +130,65 @@ export function updateProfileLanguage(lang: Language): UserProfile {
   if (typeof window !== "undefined") {
     localStorage.setItem(KEYS.PROFILE, JSON.stringify(profile));
   }
-
-  // Sync to Supabase if logged in
   if (profile.is_logged_in && isSupabaseConfigured && supabase) {
-    supabase
-      .from("profiles")
-      .update({ language: lang })
+    supabase.from("profiles").update({ language: lang })
       .eq("id", profile.device_session_id)
-      .then(({ error }) => {
-        if (error) console.error("Supabase sync language error:", error);
-      });
+      .then(({ error }) => { if (error) console.error("Supabase sync language error:", error); });
   }
+  return profile;
+}
 
+export function updateProfileAvatar(avatarUrl: string): UserProfile {
+  const profile = getOrCreateProfile();
+  profile.avatar_url = avatarUrl;
+  if (typeof window !== "undefined") {
+    localStorage.setItem(KEYS.PROFILE, JSON.stringify(profile));
+  }
+  updateUserRegistry(profile);
+  if (profile.is_logged_in && isSupabaseConfigured && supabase) {
+    supabase.from("profiles").update({ avatar_url: avatarUrl })
+      .eq("id", profile.device_session_id)
+      .then(({ error }) => { if (error) console.error("Supabase sync avatar error:", error); });
+  }
+  return profile;
+}
+
+export function updateProfileBio(bio: string): UserProfile {
+  const profile = getOrCreateProfile();
+  profile.bio = bio.trim().slice(0, 160);
+  if (typeof window !== "undefined") {
+    localStorage.setItem(KEYS.PROFILE, JSON.stringify(profile));
+  }
+  updateUserRegistry(profile);
+  if (profile.is_logged_in && isSupabaseConfigured && supabase) {
+    supabase.from("profiles").update({ bio: profile.bio })
+      .eq("id", profile.device_session_id)
+      .then(({ error }) => { if (error) console.error("Supabase sync bio error:", error); });
+  }
+  return profile;
+}
+
+export function updateProfileSocials(socials: {
+  instagram?: string;
+  telegram?: string;
+  twitter?: string;
+}): UserProfile {
+  const profile = getOrCreateProfile();
+  if (socials.instagram !== undefined) profile.social_instagram = socials.instagram.trim().replace(/^@/, "");
+  if (socials.telegram !== undefined) profile.social_telegram = socials.telegram.trim().replace(/^@/, "");
+  if (socials.twitter !== undefined) profile.social_twitter = socials.twitter.trim().replace(/^@/, "");
+  if (typeof window !== "undefined") {
+    localStorage.setItem(KEYS.PROFILE, JSON.stringify(profile));
+  }
+  updateUserRegistry(profile);
+  if (profile.is_logged_in && isSupabaseConfigured && supabase) {
+    supabase.from("profiles").update({
+      social_instagram: profile.social_instagram,
+      social_telegram: profile.social_telegram,
+      social_twitter: profile.social_twitter,
+    }).eq("id", profile.device_session_id)
+      .then(({ error }) => { if (error) console.error("Supabase sync socials error:", error); });
+  }
   return profile;
 }
 
@@ -126,19 +199,13 @@ export function incrementProfileStats(type: "reports" | "comments") {
   if (typeof window !== "undefined") {
     localStorage.setItem(KEYS.PROFILE, JSON.stringify(profile));
   }
-
-  // Sync to Supabase if logged in
+  updateUserRegistry(profile);
   if (profile.is_logged_in && isSupabaseConfigured && supabase) {
-    supabase
-      .from("profiles")
-      .update({
-        reports_count: profile.reports_count,
-        comments_count: profile.comments_count
-      })
-      .eq("id", profile.device_session_id)
-      .then(({ error }) => {
-        if (error) console.error("Supabase sync stats error:", error);
-      });
+    supabase.from("profiles").update({
+      reports_count: profile.reports_count,
+      comments_count: profile.comments_count
+    }).eq("id", profile.device_session_id)
+      .then(({ error }) => { if (error) console.error("Supabase sync stats error:", error); });
   }
 }
 
@@ -410,7 +477,10 @@ const localDb = {
     if (!raw) return [];
     try {
       const all: StationComment[] = JSON.parse(raw);
-      return all.filter(c => c.station_id === stationId && c.flags_count < 3);
+      return all
+        .filter(c => c.station_id === stationId && c.flags_count < 3)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 20);
     } catch {
       return [];
     }
@@ -424,7 +494,13 @@ const localDb = {
       try { all = JSON.parse(raw); } catch { all = []; }
     }
     all.push(comment);
-    localStorage.setItem(KEYS.COMMENTS, JSON.stringify(all));
+    // Keep only the latest 20 comments per station — oldest are dropped from memory
+    const stationComments = all
+      .filter(c => c.station_id === comment.station_id)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 20);
+    const otherComments = all.filter(c => c.station_id !== comment.station_id);
+    localStorage.setItem(KEYS.COMMENTS, JSON.stringify([...otherComments, ...stationComments]));
     incrementProfileStats("comments");
   },
 
@@ -576,7 +652,7 @@ export const dbService = {
       id: "rep_" + Math.random().toString(36).substring(2, 15),
       station_id: stationId,
       type,
-      description: description.trim() || `Warning: ${type} reported`,
+      description: description.trim(),
       created_at: now.toISOString(),
       expires_at: expires.toISOString(),
       author_session_id: profile.device_session_id,
@@ -607,31 +683,32 @@ export const dbService = {
     return report;
   },
 
-  // Fetch comments for a station
+  // Fetch comments for a station (max 20, newest first)
   async getComments(stationId: string): Promise<StationComment[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        // Fetch comments and reactions if set up
         const { data, error } = await supabase
           .from("comments")
           .select("*")
           .eq("station_id", stationId)
           .lt("flags_count", 3)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .limit(20);
         if (error) throw error;
         return data || [];
       } catch (err) {
         console.warn("Supabase getComments failed, falling back to local DB:", err);
       }
     }
-    return localDb.getComments(stationId).sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    return localDb.getComments(stationId);
   },
 
-  // Add a comment
+  // Add a comment (max 20 per station; oldest removed automatically)
   async addComment(stationId: string, text: string): Promise<StationComment | null> {
     const profile = getOrCreateProfile();
+    // Register author so their profile is discoverable from comments
+    updateUserRegistry(profile);
+
     const comment: StationComment = {
       id: "com_" + Math.random().toString(36).substring(2, 15),
       station_id: stationId,
@@ -652,6 +729,18 @@ export const dbService = {
           .single();
         if (error) throw error;
         incrementProfileStats("comments");
+        // Trim old comments — keep only 20 per station
+        try {
+          const { data: allComments } = await supabase
+            .from("comments")
+            .select("id")
+            .eq("station_id", stationId)
+            .order("created_at", { ascending: false });
+          if (allComments && allComments.length > 20) {
+            const toDelete = allComments.slice(20).map((c: { id: string }) => c.id);
+            await supabase.from("comments").delete().in("id", toDelete);
+          }
+        } catch { /* noop */ }
         return data;
       } catch (err) {
         console.warn("Supabase addComment failed, using local DB fallback:", err);
@@ -710,12 +799,7 @@ export const dbService = {
       try {
         // Run RPC increment or update statement
         const { error } = await supabase.rpc("increment_flag_comment", { comment_id: commentId });
-        if (!error) {
-          // Note: in a real system we'd look up the author's session and call recordFlagReceived on their end
-          // For now, increment local flag counter as best-effort reputation tracking
-          spamProtection.recordFlagReceived();
-          return;
-        }
+        if (!error) return;
 
         // Fallback update (get current and increment)
         const { data } = await supabase
@@ -729,17 +813,13 @@ export const dbService = {
           .from("comments")
           .update({ flags_count: currentFlags + 1 })
           .eq("id", commentId);
-        if (!err2) {
-          spamProtection.recordFlagReceived();
-          return;
-        }
+        if (!err2) return;
       } catch (err) {
         console.warn("Supabase flagComment failed:", err);
       }
     }
 
     localDb.flagComment(commentId);
-    spamProtection.recordFlagReceived();
   },
 
   // Favorites
@@ -884,30 +964,106 @@ export const dbService = {
 };
 
 // ----------------------------------------------------
+// PROFILE SERVICE — public profile lookup & reactions
+// ----------------------------------------------------
+export const profileService = {
+  async getPublicProfile(sessionId: string): Promise<UserProfileCard | null> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", sessionId)
+          .single();
+        if (!error && data) {
+          return {
+            device_session_id: data.id,
+            username: data.username,
+            created_at: data.created_at || new Date().toISOString(),
+            reports_count: data.reports_count || 0,
+            comments_count: data.comments_count || 0,
+            flags_received: data.flags_received || 0,
+            avatar_url: data.avatar_url,
+            bio: data.bio,
+            social_instagram: data.social_instagram,
+            social_telegram: data.social_telegram,
+            social_twitter: data.social_twitter,
+          };
+        }
+      } catch (err) {
+        console.warn("Supabase getPublicProfile failed:", err);
+      }
+    }
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(USER_REGISTRY_KEY) || "{}";
+        const registry = JSON.parse(raw) as Record<string, UserProfileCard>;
+        return registry[sessionId] || null;
+      } catch { /* noop */ }
+    }
+    return null;
+  },
+
+  getProfileReactions(authorSessionId: string): { heart: number; like: number; dislike: number; myReaction: ProfileReactionType | null } {
+    const mySessionId = getOrCreateProfile().device_session_id;
+    if (typeof window === "undefined") return { heart: 0, like: 0, dislike: 0, myReaction: null };
+    try {
+      const raw = localStorage.getItem("bcn_profile_reactions") || "{}";
+      const all = JSON.parse(raw) as Record<string, { heart: string[]; like: string[]; dislike: string[] }>;
+      const reactions = all[authorSessionId] || { heart: [], like: [], dislike: [] };
+      let myReaction: ProfileReactionType | null = null;
+      if (reactions.heart.includes(mySessionId)) myReaction = "heart";
+      else if (reactions.like.includes(mySessionId)) myReaction = "like";
+      else if (reactions.dislike.includes(mySessionId)) myReaction = "dislike";
+      return { heart: reactions.heart.length, like: reactions.like.length, dislike: reactions.dislike.length, myReaction };
+    } catch {
+      return { heart: 0, like: 0, dislike: 0, myReaction: null };
+    }
+  },
+
+  reactToProfile(authorSessionId: string, type: ProfileReactionType): { heart: number; like: number; dislike: number; myReaction: ProfileReactionType | null } {
+    const mySessionId = getOrCreateProfile().device_session_id;
+    if (authorSessionId === mySessionId || typeof window === "undefined") {
+      return this.getProfileReactions(authorSessionId);
+    }
+    try {
+      const raw = localStorage.getItem("bcn_profile_reactions") || "{}";
+      const all = JSON.parse(raw) as Record<string, { heart: string[]; like: string[]; dislike: string[] }>;
+      if (!all[authorSessionId]) all[authorSessionId] = { heart: [], like: [], dislike: [] };
+      const reactions = all[authorSessionId];
+      const hadThisReaction = reactions[type].includes(mySessionId);
+      reactions.heart = reactions.heart.filter(id => id !== mySessionId);
+      reactions.like = reactions.like.filter(id => id !== mySessionId);
+      reactions.dislike = reactions.dislike.filter(id => id !== mySessionId);
+      if (!hadThisReaction) reactions[type].push(mySessionId);
+      localStorage.setItem("bcn_profile_reactions", JSON.stringify(all));
+    } catch { /* noop */ }
+    return this.getProfileReactions(authorSessionId);
+  },
+};
+
+// ----------------------------------------------------
 // SPAM PROTECTION — Multi-layer Rate Limiter
 // ----------------------------------------------------
 
 const SPAM_KEYS = {
-  REPORT_TIMES:    "bcn_report_times",    // JSON array of timestamps
-  COMMENT_TIMES:   "bcn_comment_times",   // JSON array of timestamps
-  SOFT_BAN_UNTIL:  "bcn_soft_ban_until",  // ISO timestamp
-  FLAG_COUNT:      "bcn_my_flag_count",   // number — how many of MY posts got flagged
+  REPORT_TIMES:         "bcn_report_times",
+  COMMENT_TIMES:        "bcn_comment_times",
+  STATION_REPORT_TIMES: "bcn_station_report_times",  // {[stationId]: timestamp}
+  SOFT_BAN_UNTIL:       "bcn_soft_ban_until",
+  FLAG_COUNT:           "bcn_my_flag_count",
 };
 
 const LIMITS = {
-  // Sliding window
-  REPORTS_MAX:     3,            // max N reports …
-  REPORTS_WINDOW:  10 * 60 * 1000, // … within this many ms (10 min)
-  COMMENTS_MAX:    5,            // max N comments …
-  COMMENTS_WINDOW: 5 * 60 * 1000,  // … within this many ms (5 min)
-
-  // Min gap between consecutive actions (still nice-to-have)
-  REPORT_GAP:      60 * 1000,    // at least 60s between two reports
-  COMMENT_GAP:     20 * 1000,    // at least 20s between two comments
-
-  // Reputation
-  FLAG_THRESHOLD:  3,            // flags before soft-ban
-  BAN_DURATION:    24 * 60 * 60 * 1000, // 24h soft-ban
+  REPORTS_MAX:          3,
+  REPORTS_WINDOW:       10 * 60 * 1000,
+  COMMENTS_MAX:         5,
+  COMMENTS_WINDOW:      5 * 60 * 1000,
+  REPORT_GAP:           3 * 60 * 1000,   // 3 min per-user between status updates
+  STATION_REPORT_GAP:   60 * 1000,       // 1 min global per-station (any user)
+  COMMENT_GAP:          30 * 1000,       // 30s per-user between comments
+  FLAG_THRESHOLD:       3,
+  BAN_DURATION:         24 * 60 * 60 * 1000,
 };
 
 function getTimes(key: string): number[] {
@@ -920,7 +1076,6 @@ function saveTimes(key: string, times: number[]) {
 
 export const spamProtection = {
 
-  // ── Soft-ban check ─────────────────────────────────────────────────────
   isSoftBanned(): boolean {
     if (typeof window === "undefined") return false;
     const until = localStorage.getItem(SPAM_KEYS.SOFT_BAN_UNTIL);
@@ -936,52 +1091,30 @@ export const spamProtection = {
     return diff > 0 ? Math.ceil(diff / (60 * 60 * 1000)) : 0;
   },
 
-  // Called from flagComment / flagReport paths when MY content is flagged
   recordFlagReceived(): void {
     if (typeof window === "undefined") return;
     const current = parseInt(localStorage.getItem(SPAM_KEYS.FLAG_COUNT) || "0") + 1;
     localStorage.setItem(SPAM_KEYS.FLAG_COUNT, current.toString());
     if (current >= LIMITS.FLAG_THRESHOLD) {
-      const banUntil = new Date().getTime() + LIMITS.BAN_DURATION;
-      localStorage.setItem(SPAM_KEYS.SOFT_BAN_UNTIL, banUntil.toString());
-      localStorage.setItem(SPAM_KEYS.FLAG_COUNT, "0"); // reset counter after ban issued
+      localStorage.setItem(SPAM_KEYS.SOFT_BAN_UNTIL, (new Date().getTime() + LIMITS.BAN_DURATION).toString());
+      localStorage.setItem(SPAM_KEYS.FLAG_COUNT, "0");
     }
   },
 
-  // ── Report cooldown ─────────────────────────────────────────────────────
+  // Per-user report cooldown: 3 minutes
   checkReportCooldown(isAdmin = false): { allowed: boolean; remainingSec: number; reason?: string } {
     if (isAdmin) return { allowed: true, remainingSec: 0 };
     if (typeof window === "undefined") return { allowed: true, remainingSec: 0 };
-
-    if (this.isSoftBanned()) {
-      const hrs = this.softBanRemainingHrs();
-      return { allowed: false, remainingSec: hrs * 3600, reason: `Мягкая блокировка на ${hrs}ч — ваши репорты получили много жалоб.` };
-    }
-
     const now = new Date().getTime();
     const times = getTimes(SPAM_KEYS.REPORT_TIMES).filter(t => now - t < LIMITS.REPORTS_WINDOW);
-
-    // Min gap between two consecutive reports
     if (times.length > 0) {
-      const last = times[times.length - 1];
-      const gapLeft = LIMITS.REPORT_GAP - (now - last);
-      if (gapLeft > 0) {
-        return { allowed: false, remainingSec: Math.ceil(gapLeft / 1000) };
-      }
+      const gapLeft = LIMITS.REPORT_GAP - (now - times[times.length - 1]);
+      if (gapLeft > 0) return { allowed: false, remainingSec: Math.ceil(gapLeft / 1000) };
     }
-
-    // Sliding window: too many in window
     if (times.length >= LIMITS.REPORTS_MAX) {
-      const oldestInWindow = times[0];
-      const windowResetAt = oldestInWindow + LIMITS.REPORTS_WINDOW;
-      const remainingSec = Math.ceil((windowResetAt - now) / 1000);
-      return {
-        allowed: false,
-        remainingSec,
-        reason: `Слишком много репортов — подождите ${Math.ceil(remainingSec / 60)} мин.`,
-      };
+      const remainingSec = Math.ceil((times[0] + LIMITS.REPORTS_WINDOW - now) / 1000);
+      return { allowed: false, remainingSec, reason: `Слишком много репортов — подождите ${Math.ceil(remainingSec / 60)} мин.` };
     }
-
     return { allowed: true, remainingSec: 0 };
   },
 
@@ -993,40 +1126,44 @@ export const spamProtection = {
     saveTimes(SPAM_KEYS.REPORT_TIMES, times);
   },
 
-  // ── Comment cooldown ────────────────────────────────────────────────────
+  // Per-station global cooldown: 1 minute (any user updating same station)
+  checkStationCooldown(stationId: string): { allowed: boolean; remainingSec: number } {
+    if (!stationId || typeof window === "undefined") return { allowed: true, remainingSec: 0 };
+    try {
+      const raw = localStorage.getItem(SPAM_KEYS.STATION_REPORT_TIMES) || "{}";
+      const times = JSON.parse(raw) as Record<string, number>;
+      const lastTime = times[stationId];
+      if (!lastTime) return { allowed: true, remainingSec: 0 };
+      const gapLeft = LIMITS.STATION_REPORT_GAP - (Date.now() - lastTime);
+      if (gapLeft > 0) return { allowed: false, remainingSec: Math.ceil(gapLeft / 1000) };
+    } catch { /* noop */ }
+    return { allowed: true, remainingSec: 0 };
+  },
+
+  recordStationReportSent(stationId: string): void {
+    if (!stationId || typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(SPAM_KEYS.STATION_REPORT_TIMES) || "{}";
+      const times = JSON.parse(raw) as Record<string, number>;
+      times[stationId] = Date.now();
+      localStorage.setItem(SPAM_KEYS.STATION_REPORT_TIMES, JSON.stringify(times));
+    } catch { /* noop */ }
+  },
+
+  // Per-user comment cooldown: 30 seconds
   checkCommentCooldown(isAdmin = false): { allowed: boolean; remainingSec: number; reason?: string } {
     if (isAdmin) return { allowed: true, remainingSec: 0 };
     if (typeof window === "undefined") return { allowed: true, remainingSec: 0 };
-
-    if (this.isSoftBanned()) {
-      const hrs = this.softBanRemainingHrs();
-      return { allowed: false, remainingSec: hrs * 3600, reason: `Мягкая блокировка на ${hrs}ч.` };
-    }
-
     const now = new Date().getTime();
     const times = getTimes(SPAM_KEYS.COMMENT_TIMES).filter(t => now - t < LIMITS.COMMENTS_WINDOW);
-
-    // Min gap
     if (times.length > 0) {
-      const last = times[times.length - 1];
-      const gapLeft = LIMITS.COMMENT_GAP - (now - last);
-      if (gapLeft > 0) {
-        return { allowed: false, remainingSec: Math.ceil(gapLeft / 1000) };
-      }
+      const gapLeft = LIMITS.COMMENT_GAP - (now - times[times.length - 1]);
+      if (gapLeft > 0) return { allowed: false, remainingSec: Math.ceil(gapLeft / 1000) };
     }
-
-    // Sliding window
     if (times.length >= LIMITS.COMMENTS_MAX) {
-      const oldestInWindow = times[0];
-      const windowResetAt = oldestInWindow + LIMITS.COMMENTS_WINDOW;
-      const remainingSec = Math.ceil((windowResetAt - now) / 1000);
-      return {
-        allowed: false,
-        remainingSec,
-        reason: `Слишком много комментариев — подождите ${Math.ceil(remainingSec / 60)} мин.`,
-      };
+      const remainingSec = Math.ceil((times[0] + LIMITS.COMMENTS_WINDOW - now) / 1000);
+      return { allowed: false, remainingSec, reason: `Слишком много комментариев — подождите ${Math.ceil(remainingSec / 60)} мин.` };
     }
-
     return { allowed: true, remainingSec: 0 };
   },
 
@@ -1038,24 +1175,15 @@ export const spamProtection = {
     saveTimes(SPAM_KEYS.COMMENT_TIMES, times);
   },
 
-  // ── Content validation ──────────────────────────────────────────────────
   validateContent(text: string): { valid: boolean; reason?: string } {
     const trimmed = text.trim();
-    if (trimmed.length < 3) {
-      return { valid: false, reason: "Текст сообщения слишком короткий (минимум 3 символа)." };
-    }
-    if (trimmed.length > 500) {
-      return { valid: false, reason: "Текст сообщения слишком длинный (максимум 500 символов)." };
-    }
-    const blocklist = [
-      "casino", "казино", "crypto", "крипта", "binance", "invest", "инвестиции",
-      "заработать", "работа в интернете", "t.me/", "http://", "https://"
-    ];
+    if (trimmed.length < 3) return { valid: false, reason: "Текст сообщения слишком короткий (минимум 3 символа)." };
+    if (trimmed.length > 500) return { valid: false, reason: "Текст сообщения слишком длинный (максимум 500 символов)." };
+    const blocklist = ["casino", "казино", "crypto", "крипта", "binance", "invest", "инвестиции",
+      "заработать", "работа в интернете", "t.me/", "http://", "https://"];
     const lower = trimmed.toLowerCase();
     for (const phrase of blocklist) {
-      if (lower.includes(phrase)) {
-        return { valid: false, reason: "Обнаружены ссылки или запрещенные спам-слова." };
-      }
+      if (lower.includes(phrase)) return { valid: false, reason: "Обнаружены ссылки или запрещенные спам-слова." };
     }
     const emojiRegex = /^[\p{Emoji}\s]+$/u;
     if (emojiRegex.test(trimmed) && trimmed.length > 15) {
@@ -1064,3 +1192,4 @@ export const spamProtection = {
     return { valid: true };
   },
 };
+

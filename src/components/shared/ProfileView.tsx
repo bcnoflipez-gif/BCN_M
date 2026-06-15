@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   User, 
   Edit2, 
@@ -16,12 +16,18 @@ import {
   Search,
   Shield,
   Palette,
-  Megaphone
+  Megaphone,
+  Camera,
+  AtSign,
+  Send
 } from "lucide-react";
 import { 
   getOrCreateProfile, 
   updateProfileUsername, 
   updateProfileLanguage,
+  updateProfileAvatar,
+  updateProfileBio,
+  updateProfileSocials,
   signUpUser,
   signInUser,
   signOutUser,
@@ -145,6 +151,14 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
   const [editError, setEditError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Public profile state
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [bioInput, setBioInput] = useState("");
+  const [instagramInput, setInstagramInput] = useState("");
+  const [telegramInput, setTelegramInput] = useState("");
+  const [twitterInput, setTwitterInput] = useState("");
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
   // Theme state
   const [currentTheme, setCurrentTheme] = useState("default");
 
@@ -172,6 +186,9 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [emailError, setEmailError] = useState(false);
+  const [passwordError, setPasswordError] = useState(false);
+  const [usernameError, setUsernameError] = useState(false);
 
   // Admin Panel states
   const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
@@ -198,9 +215,62 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
     const data = getOrCreateProfile();
     setProfile(data);
     setUsernameInput(data.username);
+    setAvatarPreview(data.avatar_url || null);
+    setBioInput(data.bio || "");
+    setInstagramInput(data.social_instagram || "");
+    setTelegramInput(data.social_telegram || "");
+    setTwitterInput(data.social_twitter || "");
     if (onProfileChange) {
       onProfileChange(data);
     }
+  };
+
+  // Resize image to max 200px and convert to base64
+  const resizeImage = (file: File, maxSize = 200): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas unavailable")); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.75));
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) return; // 2MB limit
+    try {
+      const base64 = await resizeImage(file);
+      setAvatarPreview(base64);
+      const updated = updateProfileAvatar(base64);
+      setProfile(updated);
+    } catch (err) {
+      console.error("Avatar upload error:", err);
+    }
+  };
+
+  const handleSaveBio = () => {
+    const updated = updateProfileBio(bioInput);
+    setProfile(updated);
+  };
+
+  const handleSaveSocials = () => {
+    const updated = updateProfileSocials({
+      instagram: instagramInput,
+      telegram: telegramInput,
+      twitter: twitterInput,
+    });
+    setProfile(updated);
   };
 
   const fetchProfiles = async () => {
@@ -291,33 +361,59 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
-    setAuthLoading(true);
+    setEmailError(false);
+    setPasswordError(false);
+    setUsernameError(false);
 
     const cleanEmail = email.trim();
     const cleanPassword = password;
     const cleanUsername = usernameInput.trim();
 
-    if (!cleanEmail || !cleanPassword || (authMode === "signup" && !cleanUsername)) {
+    if (authMode === "signup" && !cleanUsername) {
+      setUsernameError(true);
       setAuthError(authT.fillAll);
-      setAuthLoading(false);
+      return;
+    }
+
+    if (!cleanEmail) {
+      setEmailError(true);
+      setAuthError(currentLang === "ru" ? "Пожалуйста, введите адрес электронной почты." : "Please enter your email address.");
+      return;
+    }
+
+    // Basic email format check
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setEmailError(true);
+      setAuthError(currentLang === "ru" ? "Неверный формат электронной почты." : "Invalid email format.");
+      return;
+    }
+
+    if (!cleanPassword) {
+      setPasswordError(true);
+      setAuthError(currentLang === "ru" ? "Пожалуйста, введите пароль." : "Please enter a password.");
       return;
     }
 
     if (cleanPassword.length < 6) {
+      setPasswordError(true);
       setAuthError(authT.passLength);
-      setAuthLoading(false);
       return;
     }
 
+    setAuthLoading(true);
     try {
       if (authMode === "signup") {
         const res = await signUpUser(cleanEmail, cleanPassword, cleanUsername);
         if (res.success) {
           setEmail("");
           setPassword("");
+          setUsernameInput("");
           refreshProfile();
         } else {
           setAuthError(res.error || "Signup failed");
+          if (res.error?.toLowerCase().includes("email")) {
+            setEmailError(true);
+          }
         }
       } else {
         const res = await signInUser(cleanEmail, cleanPassword);
@@ -327,6 +423,8 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
           refreshProfile();
         } else {
           setAuthError(res.error || "Login failed");
+          setEmailError(true);
+          setPasswordError(true);
         }
       }
     } catch (err) {
@@ -417,6 +515,110 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
             </button>
           </div>
 
+          {/* Public Profile Card */}
+          <div className="glass-card rounded-2xl p-4 border border-[#27272a]/60 space-y-4">
+            <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <User size={14} className="text-blue-500" />
+              <span>{currentLang === "ru" ? "Публичный профиль" : "Public Profile"}</span>
+            </h3>
+
+            {/* Avatar upload */}
+            <div className="flex items-center gap-4">
+              <div
+                className="h-16 w-16 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 text-xl font-extrabold text-zinc-400 cursor-pointer active:scale-95 transition"
+                style={{ background: avatarPreview ? "transparent" : "linear-gradient(135deg,#27272a,#3f3f46)", border: "2px solid rgba(255,255,255,0.08)" }}
+                onClick={() => avatarInputRef.current?.click()}
+                title={currentLang === "ru" ? "Нажмите для смены фото" : "Click to change photo"}
+              >
+                {avatarPreview
+                  ? <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+                  : <span>{profile?.username?.slice(0, 2).toUpperCase() || "?"}</span>
+                }
+              </div>
+              <div className="flex-1 space-y-1">
+                <button
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="h-9 px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300 flex items-center gap-1.5 active:scale-95 transition w-fit"
+                >
+                  <Camera size={13} />
+                  {currentLang === "ru" ? "Загрузить фото" : "Upload photo"}
+                </button>
+                <p className="text-[9px] text-zinc-600">{currentLang === "ru" ? "JPG, PNG, WebP. Макс. 2МБ." : "JPG, PNG, WebP. Max 2MB."}</p>
+              </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+            </div>
+
+            {/* BIO */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">BIO</label>
+              <textarea
+                value={bioInput}
+                onChange={(e) => setBioInput(e.target.value.slice(0, 160))}
+                onBlur={handleSaveBio}
+                rows={2}
+                maxLength={160}
+                placeholder={currentLang === "ru" ? "Расскажите о себе..." : "Tell something about yourself..."}
+                className="w-full bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/80 rounded-xl p-3 text-xs font-medium text-white placeholder-zinc-600 focus:outline-none transition-all resize-none"
+              />
+              <p className="text-[9px] text-zinc-600 text-right pr-1">{bioInput.length}/160</p>
+            </div>
+
+            {/* Social links */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">
+                {currentLang === "ru" ? "Соцсети" : "Social Media"}
+              </label>
+              {/* Instagram */}
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-black" style={{ background: "rgba(236,72,153,0.1)", border: "1px solid rgba(236,72,153,0.2)", color: "#f472b6" }}>
+                  IG
+                </div>
+                <input
+                  type="text"
+                  value={instagramInput}
+                  onChange={(e) => setInstagramInput(e.target.value.replace(/^@/, "").slice(0, 30))}
+                  onBlur={handleSaveSocials}
+                  placeholder={currentLang === "ru" ? "username (без @)" : "username (no @)"}
+                  className="flex-1 h-9 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/80 rounded-xl px-3 text-xs font-medium text-white placeholder-zinc-600 focus:outline-none transition-all"
+                />
+              </div>
+              {/* Telegram */}
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", color: "#60a5fa" }}>
+                  <Send size={13} />
+                </div>
+                <input
+                  type="text"
+                  value={telegramInput}
+                  onChange={(e) => setTelegramInput(e.target.value.replace(/^@/, "").slice(0, 30))}
+                  onBlur={handleSaveSocials}
+                  placeholder={currentLang === "ru" ? "username (без @)" : "username (no @)"}
+                  className="flex-1 h-9 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/80 rounded-xl px-3 text-xs font-medium text-white placeholder-zinc-600 focus:outline-none transition-all"
+                />
+              </div>
+              {/* Twitter / X */}
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(14,165,233,0.1)", border: "1px solid rgba(14,165,233,0.2)", color: "#38bdf8" }}>
+                  <AtSign size={13} />
+                </div>
+                <input
+                  type="text"
+                  value={twitterInput}
+                  onChange={(e) => setTwitterInput(e.target.value.replace(/^@/, "").slice(0, 30))}
+                  onBlur={handleSaveSocials}
+                  placeholder="handle"
+                  className="flex-1 h-9 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/80 rounded-xl px-3 text-xs font-medium text-white placeholder-zinc-600 focus:outline-none transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Admin Control Panel */}
           {profile.role === "admin" && (
             <div className="glass-card rounded-2xl p-4 border border-[#27272a]/60 space-y-3.5">
@@ -461,10 +663,10 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
                       (p.email && p.email.toLowerCase().includes(query)) ||
                       p.device_session_id.toLowerCase().includes(query)
                     );
-                  }).map(p => {
+                  }).map((p, index) => {
                     const adminTLocal = ADMIN_TRANSLATIONS[currentLang] || ADMIN_TRANSLATIONS.en;
                     return (
-                      <div key={p.device_session_id} className="flex items-center justify-between p-3 rounded-xl bg-[#18181b]/50 border border-[#27272a] gap-2">
+                      <div key={p.device_session_id || `profile-${index}`} className="flex items-center justify-between p-3 rounded-xl bg-[#18181b]/50 border border-[#27272a] gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className="font-bold text-xs text-white truncate">{p.username}</span>
@@ -565,7 +767,7 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
             </button>
           </div>
 
-          <form onSubmit={handleAuthSubmit} className="space-y-3.5">
+          <form onSubmit={handleAuthSubmit} className="space-y-3.5" noValidate>
             {/* Username field (Signup Only) */}
             {authMode === "signup" && (
               <div className="space-y-1">
@@ -575,11 +777,18 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
                   <input
                     type="text"
                     value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value)}
+                    onChange={(e) => {
+                      setUsernameInput(e.target.value);
+                      setUsernameError(false);
+                      setAuthError(null);
+                    }}
                     placeholder="Enter username"
-                    className="w-full h-11 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/80 rounded-xl pl-10 pr-4 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
+                    className={`w-full h-11 bg-[#09090b]/60 border rounded-xl pl-10 pr-4 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all ${
+                      usernameError 
+                        ? "border-red-500/50 focus:border-red-500/80 shadow-[0_0_10px_rgba(239,68,68,0.1)]" 
+                        : "border-[#27272a] focus:border-blue-500/80"
+                    }`}
                     maxLength={20}
-                    required
                   />
                 </div>
               </div>
@@ -593,10 +802,17 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setEmailError(false);
+                    setAuthError(null);
+                  }}
                   placeholder="name@example.com"
-                  className="w-full h-11 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/80 rounded-xl pl-10 pr-4 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
-                  required
+                  className={`w-full h-11 bg-[#09090b]/60 border rounded-xl pl-10 pr-4 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all ${
+                    emailError 
+                      ? "border-red-500/50 focus:border-red-500/80 shadow-[0_0_10px_rgba(239,68,68,0.1)]" 
+                      : "border-[#27272a] focus:border-blue-500/80"
+                  }`}
                 />
               </div>
             </div>
@@ -609,11 +825,17 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
                 <input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setPasswordError(false);
+                    setAuthError(null);
+                  }}
                   placeholder="Min 6 characters"
-                  className="w-full h-11 bg-[#09090b]/60 border border-[#27272a] focus:border-blue-500/80 rounded-xl pl-10 pr-4 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all"
-                  minLength={6}
-                  required
+                  className={`w-full h-11 bg-[#09090b]/60 border rounded-xl pl-10 pr-4 text-xs font-semibold text-white placeholder-zinc-600 focus:outline-none transition-all ${
+                    passwordError 
+                      ? "border-red-500/50 focus:border-red-500/80 shadow-[0_0_10px_rgba(239,68,68,0.1)]" 
+                      : "border-[#27272a] focus:border-blue-500/80"
+                  }`}
                 />
               </div>
             </div>
@@ -651,6 +873,8 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
           </div>
         </div>
       )}
+
+
 
       {/* Language Selector */}
       <div className="glass-card rounded-2xl p-4 border border-[#27272a]/60 space-y-3">

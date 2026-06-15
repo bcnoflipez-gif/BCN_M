@@ -36,12 +36,12 @@ export const METRO_LINES: Record<string, MetroLine> = {
   L11: { id: "L11", name: "L11", color: "#84cc16", textColor: "#ffffff", type: "metro" },
   FM: { id: "FM", name: "FM", color: "#16a34a", textColor: "#ffffff", type: "metro" },
   // Rodalies Lines
-  R1: { id: "R1", name: "R1", color: "#f59e0b", textColor: "#000000", type: "rodalies" },
-  R2: { id: "R2", name: "R2", color: "#d97706", textColor: "#ffffff", type: "rodalies" },
-  R3: { id: "R3", name: "R3", color: "#ea580c", textColor: "#ffffff", type: "rodalies" },
-  R4: { id: "R4", name: "R4", color: "#c2410c", textColor: "#ffffff", type: "rodalies" },
-  R7: { id: "R7", name: "R7", color: "#b45309", textColor: "#ffffff", type: "rodalies" },
-  R8: { id: "R8", name: "R8", color: "#78350f", textColor: "#ffffff", type: "rodalies" },
+  R1: { id: "R1", name: "R1", color: "#009bdb", textColor: "#ffffff", type: "rodalies" },
+  R2: { id: "R2", name: "R2", color: "#007236", textColor: "#ffffff", type: "rodalies" },
+  R3: { id: "R3", name: "R3", color: "#e11320", textColor: "#ffffff", type: "rodalies" },
+  R4: { id: "R4", name: "R4", color: "#f39200", textColor: "#ffffff", type: "rodalies" },
+  R7: { id: "R7", name: "R7", color: "#7e2c7f", textColor: "#ffffff", type: "rodalies" },
+  R8: { id: "R8", name: "R8", color: "#e1598f", textColor: "#ffffff", type: "rodalies" },
   R5: { id: "R5", name: "R5", color: "#f39200", textColor: "#ffffff", type: "rodalies" },
   R6: { id: "R6", name: "R6", color: "#9b2680", textColor: "#ffffff", type: "rodalies" },
 };
@@ -1154,57 +1154,68 @@ export const getStationsByLine = (lineId: string): Station[] => {
 };
 
 // Ordered station sequences per line for drawing polylines on the map
-export const LINE_ROUTES: Record<string, string[]> = {
+export const LINE_ROUTES: Record<string, string[][]> = {
   // ── METRO ────────────────────────────────────────────────────────────────
-  L1: [
+  L1: [[
     "bellvitge", "torrassa", "espanya", "universitat",
     "catalunya", "urquinaona", "arc_de_triomf", "marina",
     "el_clot", "la_sagrera", "fabra_i_puig", "santa_coloma", "fondo",
-  ],
-  L2: [
+  ]],
+  L2: [[
     "paral_lel", "universitat", "passeig_de_gracia",
     "sagrada_familia", "el_clot", "gorg", "pep_ventura", "badalona_pompeu_fabra",
-  ],
-  L3: [
+  ]],
+  L3: [[
     "cornella_centre", "sants_estacio", "espanya", "paral_lel",
     "drassanes", "liceu", "catalunya", "passeig_de_gracia", "diagonal",
-  ],
-  L4: [
+  ]],
+  L4: [[
     "barceloneta", "jaume_i", "urquinaona", "passeig_de_gracia",
     "diagonal", "poblenou", "bogatell",
-  ],
-  L5: [
+  ]],
+  L5: [[
     "cornella_centre", "can_vidalet", "sants_estacio",
     "diagonal", "sagrada_familia", "la_sagrera",
-  ],
-  L9N: ["la_sagrera", "fondo"],
-  L9S: ["aeroport_t1", "aeroport_t2", "el_prat_estacio", "torrassa"],
-  L10N: ["la_sagrera", "gorg"],
-  L10S: ["torrassa", "el_prat_estacio"],
-  L11: [],
-  FM:  ["paral_lel"],
+  ]],
+  L9N: [["la_sagrera", "fondo"]],
+  L9S: [["aeroport_t1", "aeroport_t2", "el_prat_estacio", "torrassa"]],
+  L10N: [["la_sagrera", "gorg"]],
+  L10S: [["torrassa", "el_prat_estacio"]],
+  L11: [[]],
+  FM:  [["paral_lel"]],
   // ── RODALIES ─────────────────────────────────────────────────────────────
-  R1: [
+  R1: [[
     "l_hospitalet", "sants_estacio", "passeig_de_gracia", "catalunya",
-    "arc_de_triomf", "el_clot", "badalona_rodalies", "mataro",
-  ],
-  R2: [
-    "vilanova_i_la_geltru", "sitges", "platja_castelldefels",
-    "castelldefels", "gava", "viladecans", "aeroport_t2",
+    "arc_de_triomf", "el_clot", "sant_adria_rodalies", "badalona_rodalies",
+    "el_masnou", "premia_de_mar", "vilassar_de_mar", "mataro",
+    "arenys_de_mar", "calella", "blanes", "macanet_massanes"
+  ]],
+  R2: [[
+    "sant_vicenc_de_calders", "vilanova_i_la_geltru", "sitges", "platja_castelldefels",
+    "castelldefels", "gava", "viladecans",
     "el_prat_estacio", "sants_estacio", "passeig_de_gracia",
-    "el_clot", "sant_andreu_rodalies", "granollers_centre",
-  ],
-  R3: [
-    "l_hospitalet", "sants_estacio", "passeig_de_gracia", "catalunya",
-    "arc_de_triomf", "la_sagrera", "fabra_i_puig",
-  ],
-  R4: [
-    "l_hospitalet", "sants_estacio", "espanya", "passeig_de_gracia",
-    "catalunya", "arc_de_triomf", "la_sagrera", "fabra_i_puig",
-    "sabadell_sud", "sabadell_centre", "sabadell_nord", "terrassa_estacio_nord",
-  ],
-  R7: [],
-  R8: ["granollers_centre", "sant_cugat", "rubi"],
-  R5: [],
-  R6: [],
+    "el_clot", "sant_andreu_rodalies", "montcada_i_reixac", "mollet_sant_fost",
+    "granollers_centre", "sant_celoni", "macanet_massanes"
+  ], [
+    "aeroport_t2", "el_prat_estacio"
+  ]],
+  R3: [[
+    "l_hospitalet", "sants_estacio", "catalunya",
+    "arc_de_triomf", "la_sagrera", "fabra_i_puig", "montcada_bifurcacio",
+    "vic", "ripoll", "puigcerda"
+  ]],
+  R4: [[
+    "sant_vicenc_de_calders", "vilafranca_del_penedes", "martorell", "castellbisbal",
+    "molins_de_rei", "l_hospitalet", "sants_estacio", "espanya", "catalunya", "arc_de_triomf",
+    "la_sagrera", "fabra_i_puig", "montcada_bifurcacio", "cerdanyola_del_valles",
+    "sabadell_sud", "sabadell_centre", "sabadell_nord", "terrassa_estacio_nord", "manresa"
+  ]],
+  R7: [[
+    "fabra_i_puig", "montcada_bifurcacio", "cerdanyola_del_valles", "cerdanyola_universitat"
+  ]],
+  R8: [[
+    "martorell", "castellbisbal", "rubi", "sant_cugat", "cerdanyola_universitat", "mollet_sant_fost", "granollers_centre"
+  ]],
+  R5: [[]],
+  R6: [[]],
 };

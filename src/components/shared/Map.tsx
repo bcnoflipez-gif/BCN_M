@@ -25,7 +25,6 @@ interface MapProps {
   selectedWarnings: string[];
   language: Language;
   isAdmin?: boolean;
-  mapLayer?: "all" | "metro" | "rodalies" | "none";
 }
 
 export default function Map(props: MapProps) {

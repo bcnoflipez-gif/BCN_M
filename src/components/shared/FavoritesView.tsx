@@ -24,6 +24,8 @@ export default function FavoritesView({
   const favoriteStations = STATIONS.filter(s => favoriteIds.includes(s.id));
 
   const t = TRANSLATIONS[language];
+  const tf = t; // alias — used for tf.favorites.* keys
+
 
   const getAlertText = (stationId: string) => {
     const alerts = activeReports.filter(r => r.station_id === stationId);
@@ -32,15 +34,14 @@ export default function FavoritesView({
     const types = alerts.map(a => a.type);
     
     // Check ticket control subtypes
-    if (types.some(t => ["gossos", "mosquits", "pregunta", "gorilles", "lliure"].includes(t))) {
-      const controlType = types.find(t => ["gossos", "mosquits", "pregunta", "gorilles", "lliure"].includes(t));
-      if (controlType === "lliure") return language === "ru" ? "Свободно" : language === "es" ? "Limpio" : language === "fr" ? "Libre" : "Clear";
-      return language === "ru" ? "Контроль билетов" : language === "es" ? "Control de billetes" : language === "fr" ? "Contrôle" : "Ticket check";
+    if (types.some(t => ["gossos", "pregunta", "gorilles", "lliure"].includes(t))) {
+      const controlType = types.find(t => ["gossos", "pregunta", "gorilles", "lliure"].includes(t));
+      if (controlType === "lliure") return tf.favorites.clear2;
+      return tf.favorites.ticketCheck;
     }
-    
-    if (types.includes("delay")) return language === "ru" ? "Задержка поездов" : language === "es" ? "Retraso de trenes" : language === "fr" ? "Retard" : "Train delays";
-    if (types.includes("security")) return language === "ru" ? "Карманники" : language === "es" ? "Carteristas" : language === "fr" ? "Pickpockets" : "Pickpockets";
-    return t.station.activeAlerts;
+    if (types.includes("delay")) return tf.favorites.delay;
+    if (types.includes("closed")) return tf.favorites.closed;
+    return tf.station.activeAlerts;
   };
 
   return (
@@ -49,13 +50,7 @@ export default function FavoritesView({
       <div className="mb-4 flex-shrink-0">
         <h2 className="text-xl font-extrabold text-white tracking-tight">{t.tabs.favorites}</h2>
         <p className="text-xs text-[#71717a] mt-0.5">
-          {language === "ru" 
-            ? "Быстрый доступ к статусу станций на вашем ежедневном маршруте."
-            : language === "es"
-            ? "Acceso rápido al estado de las estaciones en tu ruta diaria."
-            : language === "fr"
-            ? "Accès rapide à l'état des stations sur votre trajet quotidien."
-            : "Quick access to the status of stations on your daily route."}
+          {tf.favorites.emptyHint}
         </p>
       </div>
 
@@ -150,13 +145,7 @@ export default function FavoritesView({
           <div className="space-y-1.5 max-w-xs">
             <h3 className="font-bold text-sm text-white">{t.common.empty}</h3>
             <p className="text-xs text-[#71717a] leading-relaxed">
-              {language === "ru"
-                ? "Нажмите кнопку ❤️ в деталях станции на карте, чтобы добавить её в этот список для быстрого отслеживания."
-                : language === "es"
-                ? "Haz clic en el botón ❤️ en los detalles de la estación en el mapa para añadirla a esta lista."
-                : language === "fr"
-                ? "Cliquez sur le bouton ❤️ dans les détails de la station sur la carte pour l'ajouter à cette liste."
-                : "Click the ❤️ button in the station details on the map to add it to this list."}
+              {tf.favorites.emptyHint}
             </p>
           </div>
         </div>

@@ -11,14 +11,17 @@ interface TickerBannerProps {
 }
 
 export default function TickerBanner({ activeAlertsCount: _ignored }: TickerBannerProps) {
-  const [text, setText] = useState(DEFAULT_TICKER);
+  const [text, setText] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("bcn_ticker");
+        if (saved && saved.trim()) return saved;
+      } catch { /* noop */ }
+    }
+    return DEFAULT_TICKER;
+  });
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("bcn_ticker");
-      if (saved && saved.trim()) setText(saved);
-    } catch { /* noop */ }
-
     const onStorage = (e: StorageEvent) => {
       if (e.key === "bcn_ticker" && e.newValue) setText(e.newValue);
     };

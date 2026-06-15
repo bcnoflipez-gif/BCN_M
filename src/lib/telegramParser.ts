@@ -103,9 +103,6 @@ const ALERT_KEYWORDS: Record<ReportType, string[]> = {
   gossos: [
     "gossos", "perro", "perros", "собака", "собаки", "собак", "dog", "dogs"
   ],
-  mosquits: [
-    "mosquits", "paisano", "de paisano", "без формы", "гражданском", "гражданской", "скрытые", "plainclothes"
-  ],
   pregunta: [
     "pregunta", "consulta", "опрос", "проверяют на входе", "спросить", "узнать", "входе перед", "inquiry"
   ],
@@ -116,20 +113,14 @@ const ALERT_KEYWORDS: Record<ReportType, string[]> = {
     "lliure", "libre", "clean", "limpio", "свободно", "чисто", "проход свободен", "нет проверок", "clear"
   ],
   delay: [
-    "retraso", "demora", "parado", "huelga", "averia", "no funciona",
+    "retraso", "demora", "parado", "averia", "no funciona",
     "задержка", "стоит поезд", "сломался", "задержки", "опоздание", "отменили"
   ],
-  crowd: [
-    "gente", "lleno", "colas", "aglomeracion", "crowd",
-    "толпа", "давка", "народу", "очереди", "много людей"
-  ],
-  security: [
-    "robar", "cartera", "ladron", "cuidado", "mosso", "policia", "police", "hurto",
-    "вор", "кража", "карманники", "украли", "полиция", "копы", "менты", "подозрительные"
+  closed: [
+    "cerrado", "tancat", "closed", "закрыто", "закрыта", "закрыт", "блокирован", "заблокирован", "ferme", "fermee"
   ],
   other: [
-    "obras", "cerrado", "incidencia",
-    "ремонт", "закрыто", "проблема", "авария"
+    "obras", "incidencia", "ремонт", "проблема", "авария"
   ]
 };
 

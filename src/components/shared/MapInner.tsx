@@ -17,7 +17,6 @@ interface MapInnerProps {
   selectedWarnings: string[];
   language: Language;
   isAdmin?: boolean;
-  mapLayer?: "all" | "metro" | "rodalies" | "none";
 }
 
 // Helper component to center map when selectedStationId changes
@@ -141,7 +140,6 @@ export default function MapInner({
   selectedWarnings,
   language,
   isAdmin = false,
-  mapLayer = "all",
 }: MapInnerProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -149,13 +147,12 @@ export default function MapInner({
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(13);
 
-  // Memoize all station icons to prevent Leaflet from recreating DOM elements on every render
-  const stationIcons = useMemo(() => {
-    const icons: Record<string, L.DivIcon> = {};
-    
-    stations.forEach((station) => {
+  // Step 1: memoize ONLY the data that changes when reports/selection change.
+  // This does NOT depend on zoom — avoids re-computing colors on every zoom.
+  const stationIconData = useMemo(() => {
+    return stations.map((station) => {
       const stationAlerts = activeReports.filter(r => r.station_id === station.id);
-      const hasAlert = stationAlerts.length > 0;
+      const hasAlert = stationAlerts.length > 0 && !stationAlerts.some(a => a.type === "lliure");
       const primaryLineId = station.lines[0];
       const lineColor = METRO_LINES[primaryLineId]?.color || "#3b82f6";
       const isSelected = selectedStationId === station.id;
@@ -171,12 +168,21 @@ export default function MapInner({
         } else if (alertType === "delay" || alertType === "pregunta") {
           alertColor = "rgba(245, 158, 11, 0.5)";
           alertBorderColor = "#f59e0b";
-        } else if (alertType === "crowd") {
-          alertColor = "rgba(6, 182, 212, 0.5)";
-          alertBorderColor = "#06b6d4";
+        } else if (alertType === "closed") {
+          alertColor = "rgba(239, 68, 68, 0.6)";
+          alertBorderColor = "#ef4444";
         }
       }
 
+      return { station, hasAlert, lineColor, isSelected, alertColor, alertBorderColor };
+    });
+  }, [stations, activeReports, selectedStationId]); // ← NO zoom here
+
+  // Step 2: Convert data to Leaflet DivIcons. Only re-runs when zoom OR data changes.
+  const stationIcons = useMemo(() => {
+    const icons: Record<string, L.DivIcon> = {};
+
+    stationIconData.forEach(({ station, hasAlert, lineColor, isSelected, alertColor, alertBorderColor }) => {
       const cfg = getIconSizeConfig(zoom, isSelected);
 
       const htmlString = `
@@ -223,51 +229,40 @@ export default function MapInner({
     });
 
     return icons;
-  }, [stations, activeReports, selectedStationId, zoom]);
+  }, [stationIconData, zoom]); // ← depends on processed data + zoom only
 
-  // Memoize polyline routes — all stations per line, geographically sorted
+  // Memoize polyline routes using exact segments defined in LINE_ROUTES
   const polylines = useMemo(() => {
-    // Nearest-neighbor sort: start from westernmost station, always go to closest unvisited
-    const sortByRoute = (pts: { id: string; lat: number; lng: number }[]) => {
-      if (pts.length < 2) return pts;
-      const remaining = [...pts];
-      // Start from westernmost (lowest lng)
-      const startIdx = remaining.reduce((best, p, i) =>
-        p.lng < remaining[best].lng ? i : best, 0);
-      const sorted = [remaining.splice(startIdx, 1)[0]];
-      while (remaining.length > 0) {
-        const last = sorted[sorted.length - 1];
-        let closestIdx = 0;
-        let closestDist = Infinity;
-        remaining.forEach((p, i) => {
-          const d = Math.hypot(p.lat - last.lat, p.lng - last.lng);
-          if (d < closestDist) { closestDist = d; closestIdx = i; }
-        });
-        sorted.push(remaining.splice(closestIdx, 1)[0]);
-      }
-      return sorted;
-    };
-
     return Object.entries(METRO_LINES).flatMap(([lineId, line]) => {
-      // Filter by mapLayer
-      if (mapLayer === "none") return [];
-      if (mapLayer === "metro" && line.type !== "metro") return [];
-      if (mapLayer === "rodalies" && line.type !== "rodalies") return [];
+      // Filter by selectedSystems
+      if (!selectedSystems.includes(line.type)) return [];
+
       // Filter by selectedLines
       if (!selectedLines.includes(lineId)) return [];
 
-      const stationsForLine = STATIONS
-        .filter(s => s.lines.includes(lineId))
-        .map(s => ({ id: s.id, lat: s.lat, lng: s.lng }));
+      const segments = LINE_ROUTES[lineId];
+      if (!segments || segments.length === 0) return [];
 
-      if (stationsForLine.length < 2) return [];
+      return segments.map((segment, index) => {
+        const coords: [number, number][] = segment
+          .map(stationId => {
+            const station = STATIONS.find(s => s.id === stationId);
+            return station ? [station.lat, station.lng] : null;
+          })
+          .filter((coord): coord is [number, number] => coord !== null);
 
-      const sorted = sortByRoute(stationsForLine);
-      const coords: [number, number][] = sorted.map(s => [s.lat, s.lng]);
+        if (coords.length < 2) return null;
 
-      return [{ lineId, color: line.color, type: line.type, coords }];
+        return {
+          key: `${lineId}-${index}`,
+          lineId,
+          color: line.color,
+          type: line.type,
+          coords
+        };
+      }).filter((p): p is NonNullable<typeof p> => p !== null);
     });
-  }, [mapLayer, selectedLines]);
+  }, [selectedLines, selectedSystems]);
 
 
   // Memoize user location icon to avoid recreation
@@ -361,9 +356,9 @@ export default function MapInner({
         <MapEvents onZoomChange={setZoom} />
 
         {/* Route polylines — drawn below station markers */}
-        {polylines.map(({ lineId, color, type, coords }) => (
+        {polylines.map(({ key, lineId, color, type, coords }) => (
           <Polyline
-            key={lineId}
+            key={key}
             positions={coords}
             pathOptions={{
               color,

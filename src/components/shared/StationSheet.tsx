@@ -4,13 +4,14 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { 
   Heart, Accessibility, ArrowRightLeft, Info, 
   MessageSquare, ShieldAlert, Trash2, Send, Flag, 
-  User, Clock, AlertTriangle, Users, HelpCircle, 
-  Smile, ArrowLeft
+  User, Clock, HelpCircle, 
+  Smile, ArrowLeft, Lock
 } from "lucide-react";
 import { Station, METRO_LINES } from "../../lib/metroData";
 import { StationComment, StationReport, ReportType, EmojiType, Language, StationOverride } from "../../types";
 import { dbService, spamProtection, getOrCreateProfile } from "../../lib/db";
 import { TRANSLATIONS } from "../../lib/translations";
+import AuthorProfileModal from "./AuthorProfileModal";
 
 interface StationSheetProps {
   station: Station | null;
@@ -23,6 +24,13 @@ interface StationSheetProps {
 }
 
 type SheetTab = "info" | "comments";
+
+function getGlobalStationRemainingSec(recentReportCreatedAt: string | undefined): number {
+  if (!recentReportCreatedAt) return 0;
+  const timeSinceReport = Date.now() - new Date(recentReportCreatedAt).getTime();
+  const globalGapLeft = 60 * 1000 - timeSinceReport;
+  return globalGapLeft > 0 ? Math.ceil(globalGapLeft / 1000) : 0;
+}
 
 export default function StationSheet({
   station,
@@ -40,6 +48,19 @@ export default function StationSheet({
   const [commentError, setCommentError] = useState<string | null>(null);
   const [commentCooldown, setCommentCooldown] = useState<number>(0);
   const [reportCooldown, setReportCooldown] = useState<number>(0);
+  // Author profile modal
+  const [authorProfileId, setAuthorProfileId] = useState<string | null>(null);
+
+  const getAvatarFromRegistry = (sessionId: string): string | null => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem("bcn_user_registry") || "{}";
+      const registry = JSON.parse(raw);
+      return registry[sessionId]?.avatar_url || null;
+    } catch {
+      return null;
+    }
+  };
   
   // Active warning status type clicked by the user
   const [clickedDescriptionType, setClickedDescriptionType] = useState<ReportType | null>(null);
@@ -54,6 +75,7 @@ export default function StationSheet({
   const [editInfoEn, setEditInfoEn] = useState("");
   const [editPhotoUrl, setEditPhotoUrl] = useState("");
   const [saveLoading, setSaveLoading] = useState(false);
+  const [overrideError, setOverrideError] = useState<string | null>(null);
 
   const profile = getOrCreateProfile();
   const currentSessionId = profile.device_session_id;
@@ -95,13 +117,46 @@ export default function StationSheet({
   const isAdminRef = useRef(isAdmin);
   useEffect(() => { isAdminRef.current = isAdmin; }, [isAdmin]);
 
+  const stationIdRef = useRef(station?.id ?? "");
+  const sessionIdRef = useRef(currentSessionId);
+  useEffect(() => {
+    stationIdRef.current = station?.id ?? "";
+    sessionIdRef.current = currentSessionId;
+  }, [station?.id, currentSessionId]);
+
+  const activeReportsRef = useRef(activeReports);
+  useEffect(() => {
+    activeReportsRef.current = activeReports;
+  }, [activeReports]);
+
+  // Drag / swipe refs (declared unconditionally before early return)
+  const dragStartY = useRef<number | null>(null);
+  const dragCurrentY = useRef<number>(0);
+  const isDragging = useRef(false);
+
   // Handle cooldown timers
   useEffect(() => {
     const timer = setInterval(() => {
       const comCheck = spamProtection.checkCommentCooldown(isAdminRef.current);
       setCommentCooldown(comCheck.remainingSec);
-      const repCheck = spamProtection.checkReportCooldown(isAdminRef.current);
-      setReportCooldown(repCheck.remainingSec);
+
+      if (isAdminRef.current) {
+        setReportCooldown(0);
+      } else {
+        const repCheck = spamProtection.checkReportCooldown(false);
+        const stCheck = spamProtection.checkStationCooldown(stationIdRef.current);
+        let stRemainingSec = stCheck.remainingSec;
+
+        // Also check if there's a recent report in activeReports (from DB)
+        const recentDbReport = activeReportsRef.current.find(r => r.station_id === stationIdRef.current);
+        if (recentDbReport) {
+          const dbRemainingSec = getGlobalStationRemainingSec(recentDbReport.created_at);
+          stRemainingSec = Math.max(stRemainingSec, dbRemainingSec);
+        }
+
+        // Show whichever cooldown is longer
+        setReportCooldown(Math.max(repCheck.remainingSec, stRemainingSec));
+      }
     }, 1000);
     return () => clearInterval(timer);
   }, []); // stable — never changes size
@@ -110,26 +165,45 @@ export default function StationSheet({
     setEditInfoRu(override?.info_text_ru || station?.generalInfo.infoTextRu || "");
     setEditInfoEn(override?.info_text_en || station?.generalInfo.infoTextEn || "");
     setEditPhotoUrl(override?.photo_url || "");
+    setOverrideError(null);
     setIsEditingOverride(true);
   };
 
   const handleSaveOverride = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!station) return;
+    setOverrideError(null);
+
+    const cleanRu = editInfoRu.trim();
+    const cleanEn = editInfoEn.trim();
+
+    if (!cleanRu || !cleanEn) {
+      setOverrideError(language === "ru" ? "Заполните описание на русском и английском." : "Please fill in descriptions for both languages.");
+      return;
+    }
+
+    if (editPhotoUrl.trim() && !/^https?:\/\/.+/i.test(editPhotoUrl.trim())) {
+      setOverrideError(language === "ru" ? "Неверный формат ссылки на фото." : "Invalid photo URL format.");
+      return;
+    }
+
     setSaveLoading(true);
     try {
       const success = await dbService.saveStationOverride(
         station.id,
-        editInfoRu,
-        editInfoEn,
-        editPhotoUrl
+        cleanRu,
+        cleanEn,
+        editPhotoUrl.trim()
       );
       if (success) {
         await loadOverride();
         setIsEditingOverride(false);
+      } else {
+        setOverrideError(language === "ru" ? "Ошибка сохранения изменений." : "Failed to save override changes.");
       }
     } catch (err) {
       console.error("Failed to save override:", err);
+      setOverrideError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaveLoading(false);
     }
@@ -141,17 +215,42 @@ export default function StationSheet({
     setClickedDescriptionType(status);
     setCommentError(null);
 
-    // Spam Protection: check report cooldown
-    const cooldownCheck = spamProtection.checkReportCooldown();
-    if (!cooldownCheck.allowed) {
-      setCommentError(`${t.report.cooldownWait} ${cooldownCheck.remainingSec}s.`);
-      return;
+    if (!isAdmin) {
+      // Per-station global cooldown: 1 min (any user)
+      const stationCheck = spamProtection.checkStationCooldown(station.id);
+      let allowed = stationCheck.allowed;
+      let remainingSec = stationCheck.remainingSec;
+
+      // Also check if there's a recent report in activeReports (from DB)
+      const recentDbReport = activeReports.find(r => r.station_id === station.id);
+      if (recentDbReport) {
+        const dbRemainingSec = getGlobalStationRemainingSec(recentDbReport.created_at);
+        if (dbRemainingSec > 0) {
+          allowed = false;
+          remainingSec = Math.max(remainingSec, dbRemainingSec);
+        }
+      }
+
+      if (!allowed) {
+        const msg = language === "ru"
+          ? `Станция недавно обновлена — подождите ${remainingSec}с`
+          : `Station recently updated — wait ${remainingSec}s`;
+        setCommentError(msg);
+        return;
+      }
+
+      // Per-user cooldown: 3 min
+      const cooldownCheck = spamProtection.checkReportCooldown(false);
+      if (!cooldownCheck.allowed) {
+        setCommentError(`${t.report.cooldownWait} ${cooldownCheck.remainingSec}s.`);
+        return;
+      }
     }
 
-    // Add status report
     const report = await dbService.addReport(station.id, status, "");
     if (report) {
       spamProtection.recordReportSent();
+      spamProtection.recordStationReportSent(station.id);
       onReportAdded();
     } else {
       setCommentError(t.report.error);
@@ -165,8 +264,8 @@ export default function StationSheet({
     const hasText = newCommentText.trim().length > 0;
     if (!hasText) return;
 
-    // Spam Protection: check comment cooldown
-    const cooldownCheck = spamProtection.checkCommentCooldown();
+    // Spam Protection: check comment cooldown (admins bypass)
+    const cooldownCheck = spamProtection.checkCommentCooldown(isAdmin);
     if (!cooldownCheck.allowed) {
       setCommentError(`${t.report.cooldownWait} ${cooldownCheck.remainingSec}s.`);
       return;
@@ -229,13 +328,6 @@ export default function StationSheet({
           icon: ShieldAlert, 
           color: "text-red-500 bg-red-500/10 border-red-500/20" 
         };
-      case "mosquits": 
-        return { 
-          label: t.controls.mosquits.label, 
-          desc: t.controls.mosquits.desc, 
-          icon: ShieldAlert, 
-          color: "text-rose-500 bg-rose-500/10 border-rose-500/20" 
-        };
       case "pregunta": 
         return { 
           label: t.controls.pregunta.label, 
@@ -257,41 +349,31 @@ export default function StationSheet({
           icon: Smile, 
           color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" 
         };
-      case "delay": 
-        return { 
-          label: language === "ru" ? "Задержка поезда" : language === "es" ? "Retraso de tren" : language === "fr" ? "Retard de train" : "Train Delay", 
-          desc: language === "ru" ? "Поезда задерживаются или стоят в туннеле." : "Trains are experiencing delays or stopped.", 
-          icon: Clock, 
-          color: "text-amber-500 bg-amber-500/10 border-amber-500/20" 
+      case "delay":
+        return {
+          label: t.controls.delay.label,
+          desc: t.controls.delay.desc,
+          icon: Clock,
+          color: "text-amber-500 bg-amber-500/10 border-amber-500/20"
         };
-      case "crowd": 
-        return { 
-          label: language === "ru" ? "Толпа / Давка" : language === "es" ? "Aglomeración / Colas" : language === "fr" ? "Foule / Affluence" : "Crowd / High Traffic", 
-          desc: language === "ru" ? "Очень высокая заполненность станции или очереди." : "High passenger density or long queues.", 
-          icon: Users, 
-          color: "text-cyan-500 bg-cyan-500/10 border-cyan-500/20" 
+      case "closed":
+        return {
+          label: t.controls.closed.label,
+          desc: t.controls.closed.desc,
+          icon: Lock,
+          color: "text-red-500 bg-red-500/10 border-red-500/20"
         };
-      case "security": 
-        return { 
-          label: language === "ru" ? "Карманники / Кражи" : language === "es" ? "Carteristas / Robos" : language === "fr" ? "Vols / Pickpockets" : "Security Alert / Theft", 
-          desc: language === "ru" ? "В районе станции замечены карманные воры." : "Pickpockets have been spotted active nearby.", 
-          icon: AlertTriangle, 
-          color: "text-rose-500 bg-rose-500/10 border-rose-500/20" 
-        };
-      default: 
-        return { 
-          label: language === "ru" ? "Прочее происшествие" : "Other Incident", 
-          desc: "General alert reported by commuter.", 
-          icon: HelpCircle, 
-          color: "text-zinc-500 bg-zinc-500/10 border-zinc-500/20" 
+      default:
+        return {
+          label: t.controls.other.label,
+          desc: t.controls.other.desc,
+          icon: HelpCircle,
+          color: "text-zinc-500 bg-zinc-500/10 border-zinc-500/20"
         };
     }
   };
 
   // ── Drag / swipe logic ──────────────────────────────────────────────────
-  const dragStartY = useRef<number | null>(null);
-  const dragCurrentY = useRef<number>(0);
-  const isDragging = useRef(false);
   const SNAP_THRESHOLD = 40; // px — lower = easier to trigger
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -444,16 +526,23 @@ export default function StationSheet({
         {/* TAB 1: INFO */}
         {activeTab === "info" && (
           isEditingOverride ? (
-            <form onSubmit={handleSaveOverride} className="space-y-4 animate-in fade-in duration-200">
+            <form onSubmit={handleSaveOverride} className="space-y-4 animate-in fade-in duration-200" noValidate>
               <div className="flex justify-between items-center">
                 <h3 className="text-xs font-bold text-white uppercase tracking-widest pl-0.5">
-                  {language === "ru" ? "Редактирование" : "Edit Details"}
+                  {t.station.editDetails}
                 </h3>
               </div>
+
+              {overrideError && (
+                <div className="p-3 bg-red-950/20 border border-red-500/20 text-red-400 text-[10px] font-bold rounded-xl flex gap-2">
+                  <ShieldAlert size={14} className="flex-shrink-0 mt-0.5" />
+                  <span>{overrideError}</span>
+                </div>
+              )}
               
               <div className="space-y-1">
                 <label className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">
-                  {language === "ru" ? "Описание (Русский)" : "Description (Russian)"}
+                  {t.station.descRu}
                 </label>
                 <textarea
                   value={editInfoRu}
@@ -466,7 +555,7 @@ export default function StationSheet({
 
               <div className="space-y-1">
                 <label className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">
-                  {language === "ru" ? "Описание (Английский)" : "Description (English)"}
+                  {t.station.descEn}
                 </label>
                 <textarea
                   value={editInfoEn}
@@ -479,7 +568,7 @@ export default function StationSheet({
 
               <div className="space-y-1">
                 <label className="text-[9px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">
-                  {language === "ru" ? "Ссылка на фото" : "Photo URL"}
+                  {t.station.photoUrl}
                 </label>
                 <input
                   type="url"
@@ -499,7 +588,7 @@ export default function StationSheet({
                   {saveLoading && (
                     <div className="h-4 w-4 rounded-full border-2 border-t-white border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
                   )}
-                  <span>{language === "ru" ? "Сохранить" : "Save Changes"}</span>
+                  <span>{t.station.saveChanges}</span>
                 </button>
                 <button
                   type="button"
@@ -515,7 +604,7 @@ export default function StationSheet({
               {/* Active Alerts */}
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest pl-0.5">
-                  {language === "ru" ? "Текущий статус" : "Current Status"}
+                  {t.station.currentStatus}
                 </h3>
                 {(() => {
                   const warning = activeWarning;
@@ -545,9 +634,11 @@ export default function StationSheet({
                               </span>
                             )}
                           </div>
-                          <p className="text-xs opacity-90 leading-relaxed font-medium">
-                            {warning.description}
-                          </p>
+                          {warning.description && (
+                            <p className="text-xs opacity-90 leading-relaxed font-medium">
+                              {warning.description}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -572,7 +663,7 @@ export default function StationSheet({
                       onClick={startEditing}
                       className="h-8 px-3 rounded-lg bg-blue-600/10 border border-blue-500/20 text-blue-400 hover:bg-blue-600/20 text-[10px] font-extrabold active:scale-95 transition-all"
                     >
-                      {language === "ru" ? "Редактировать" : "Edit Info"}
+                      {t.station.editInfo}
                     </button>
                   )}
                 </div>
@@ -589,9 +680,9 @@ export default function StationSheet({
                 )}
                 
                 <p className="text-xs text-[#fafafa] leading-relaxed font-medium">
-                  {language === "ru" 
-                    ? (override?.info_text_ru || station.generalInfo.infoTextRu) 
-                    : (override?.info_text_en || station.generalInfo.infoTextEn)}
+                {language === "ru"
+                    ? (override?.info_text_ru || station.generalInfo.infoTextRu || t.station.noInfo)
+                    : (override?.info_text_en || station.generalInfo.infoTextEn || t.station.noInfo)}
                 </p>
 
                 {/* Grid of features */}
@@ -636,7 +727,7 @@ export default function StationSheet({
             {/* Current Status Badge inside Community tab */}
             <div className="space-y-1.5 flex-shrink-0">
               <span className="text-[9px] font-extrabold text-[#71717a] uppercase tracking-wider pl-1">
-                {language === "ru" ? "Текущий статус станции" : language === "es" ? "Estado actual" : language === "fr" ? "Statut actuel" : "Current Status"}
+                {t.station.currentStatus}
               </span>
               {(() => {
                 const warning = activeWarning;
@@ -665,9 +756,11 @@ export default function StationSheet({
                             </span>
                           )}
                         </div>
-                        <p className="text-xs opacity-90 leading-relaxed font-medium">
-                          {warning.description}
-                        </p>
+                        {warning.description && (
+                          <p className="text-xs opacity-90 leading-relaxed font-medium">
+                            {warning.description}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -683,99 +776,107 @@ export default function StationSheet({
             </div>
 
             {/* Warning Status Selection Buttons */}
-            <div className="space-y-2 flex-shrink-0 border-t border-[#18181b]/50 pt-2.5">
-              <span className="text-[9px] font-extrabold text-[#71717a] uppercase tracking-wider pl-1">
-                {language === "ru"
-                  ? reportCooldown > 0 ? `Подождите ${reportCooldown}с перед обновлением` : "Обновить статус (актуально 2 часа)"
-                  : language === "es"
-                  ? reportCooldown > 0 ? `Espera ${reportCooldown}s para actualizar` : "Actualizar estado (activo 2h)"
-                  : language === "fr"
-                  ? reportCooldown > 0 ? `Attendez ${reportCooldown}s` : "Mettre à jour l'état (actif 2h)"
-                  : reportCooldown > 0 ? `Wait ${reportCooldown}s before updating` : "Update Status (Active for 2h)"}
-              </span>
-              <div className="grid grid-cols-4 gap-1.5">
-                {([
-                  { id: "gossos" as ReportType, label: "👮" },
-                  { id: "mosquits" as ReportType, label: "📛" },
-                  { id: "pregunta" as ReportType, label: "❔" },
-                  { id: "gorilles" as ReportType, label: "🦺" },
-                  { id: "lliure" as ReportType, label: "💚" },
-                  { id: "delay" as ReportType, label: "⏳" },
-                  { id: "crowd" as ReportType, label: "👥" },
-                  { id: "security" as ReportType, label: "⚠️" }
-                ]).map(type => {
-                  const currentActiveReport = stationWarnings[0];
-                  const isSelected = currentActiveReport?.type === type.id;
-                  const info = getReportTypeInfo(type.id);
-                  return (
-                    <button
-                      key={type.id}
-                      type="button"
-                      onClick={() => handleStatusUpdate(type.id)}
-                      disabled={reportCooldown > 0}
-                      className={`h-11 rounded-xl border text-sm flex items-center justify-center transition-all duration-200 active:scale-90 ${
-                        isSelected
-                          ? "bg-blue-600/20 border-blue-500 text-blue-400 font-extrabold shadow-[0_0_10px_rgba(59,130,246,0.15)]"
-                          : "bg-[#18181b]/45 border-[#27272a]/60 text-zinc-400 hover:border-zinc-700 disabled:opacity-40"
-                      }`}
-                      title={info.label}
-                      aria-label={info.label}
-                    >
-                      <span>{type.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
- 
-              {/* Status explanation description details */}
-              {currentDescriptionType && (
-                <div className="bg-[#121214]/50 border border-[#27272a]/40 rounded-xl p-2.5 text-[10px] leading-relaxed text-[#a1a1aa] flex items-start gap-2 animate-in fade-in slide-in-from-top-1 duration-150 shadow-inner">
-                  <Info size={12} className="text-blue-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <span className="font-extrabold text-white block mb-0.5">
-                      {getReportTypeInfo(currentDescriptionType).label}
-                    </span>
-                    <span>
-                      {getReportTypeInfo(currentDescriptionType).desc}
-                    </span>
-                  </div>
+            {profile.is_logged_in ? (
+              <div className="space-y-2 flex-shrink-0 border-t border-[#18181b]/50 pt-2.5">
+                <span className="text-[9px] font-extrabold text-[#71717a] uppercase tracking-wider pl-1">
+                  {reportCooldown > 0
+                    ? `${t.report.cooldownWait} ${reportCooldown}s`
+                    : language === "ru" ? "Обновить статус (актуально 2 часа)"
+                    : language === "es" ? "Actualizar estado (activo 2h)"
+                    : language === "fr" ? "Mettre à jour l'état (actif 2h)"
+                    : "Update Status (Active for 2h)"}
+                </span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {([
+                    { id: "gossos" as ReportType, label: "👮" },
+                    { id: "pregunta" as ReportType, label: "❔" },
+                    { id: "gorilles" as ReportType, label: "🦺" },
+                    { id: "lliure" as ReportType, label: "💚" },
+                    { id: "delay" as ReportType, label: "⏳" },
+                    { id: "closed" as ReportType, label: "🔒" }
+                  ]).map(type => {
+                    const currentActiveReport = stationWarnings[0];
+                    const isSelected = currentActiveReport?.type === type.id;
+                    const info = getReportTypeInfo(type.id);
+                    return (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => handleStatusUpdate(type.id)}
+                        disabled={reportCooldown > 0}
+                        className={`h-11 rounded-xl border text-sm flex items-center justify-center transition-all duration-200 active:scale-90 ${
+                          isSelected
+                            ? "bg-blue-600/20 border-blue-500 text-blue-400 font-extrabold shadow-[0_0_10px_rgba(59,130,246,0.15)]"
+                            : "bg-[#18181b]/45 border-[#27272a]/60 text-zinc-400 hover:border-zinc-700 disabled:opacity-40"
+                        }`}
+                        title={info.label}
+                        aria-label={info.label}
+                      >
+                        <span>{type.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
+   
+                {/* Status explanation description details */}
+                {currentDescriptionType && (
+                  <div className="bg-[#121214]/50 border border-[#27272a]/40 rounded-xl p-2.5 text-[10px] leading-relaxed text-[#a1a1aa] flex items-start gap-2 animate-in fade-in slide-in-from-top-1 duration-150 shadow-inner">
+                    <Info size={12} className="text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <span className="font-extrabold text-white block mb-0.5">
+                        {getReportTypeInfo(currentDescriptionType).label}
+                      </span>
+                      <span>
+                        {getReportTypeInfo(currentDescriptionType).desc}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             {/* Comment Form */}
-            <form onSubmit={handleCommunitySubmit} className="space-y-2 flex-shrink-0">
-              <div className="relative">
-                <input 
-                  type="text" 
-                  value={newCommentText}
-                  onChange={(e) => {
-                    setNewCommentText(e.target.value);
-                    setCommentError(null);
-                  }}
-                  placeholder={
-                    commentCooldown > 0 
-                      ? `${t.report.cooldownWait} ${commentCooldown}s` 
-                      : t.station.addCommentPlaceholder
-                  }
-                  disabled={commentCooldown > 0}
-                  className="w-full bg-[#18181b] border border-[#27272a] rounded-xl pl-3.5 pr-12 py-2.5 text-xs text-[#fafafa] focus:outline-none focus:border-blue-500/60 disabled:opacity-50 font-medium h-11"
-                />
-                <button 
-                  type="submit" 
-                  disabled={!newCommentText.trim() || commentCooldown > 0}
-                  className="absolute right-1.5 top-1.5 h-8 w-8 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white active:scale-95 transition-all disabled:opacity-30 disabled:scale-100"
-                  aria-label="Send message"
-                >
-                  <Send size={14} />
-                </button>
-              </div>
-              {commentError && (
-                <div className="text-[10px] text-red-400 font-bold bg-red-950/20 border border-red-500/20 px-2.5 py-1.5 rounded">
-                  {commentError}
+            {profile.is_logged_in ? (
+              <form onSubmit={handleCommunitySubmit} className="space-y-2 flex-shrink-0" noValidate>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    value={newCommentText}
+                    onChange={(e) => {
+                      setNewCommentText(e.target.value);
+                      setCommentError(null);
+                    }}
+                    placeholder={
+                      commentCooldown > 0 
+                        ? `${t.report.cooldownWait} ${commentCooldown}s` 
+                        : t.station.addCommentPlaceholder
+                    }
+                    disabled={commentCooldown > 0}
+                    className="w-full bg-[#18181b] border border-[#27272a] rounded-xl pl-3.5 pr-12 py-2.5 text-xs text-[#fafafa] focus:outline-none focus:border-blue-500/60 disabled:opacity-50 font-medium h-11"
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={!newCommentText.trim() || commentCooldown > 0}
+                    className="absolute right-1.5 top-1.5 h-8 w-8 rounded-lg bg-blue-600 hover:bg-blue-700 flex items-center justify-center text-white active:scale-95 transition-all disabled:opacity-30 disabled:scale-100"
+                    aria-label="Send message"
+                  >
+                    <Send size={14} />
+                  </button>
                 </div>
-              )}
-            </form>
+                {commentError && (
+                  <div className="text-[10px] text-red-400 font-bold bg-red-950/20 border border-red-500/20 px-2.5 py-1.5 rounded">
+                    {commentError}
+                  </div>
+                )}
+              </form>
+            ) : (
+              <div className="p-4 bg-blue-600/5 border border-blue-500/20 rounded-2xl flex flex-col items-center text-center space-y-2.5 flex-shrink-0">
+                <Info size={16} className="text-blue-500" />
+                <p className="text-xs text-[#a1a1aa] leading-relaxed font-semibold">
+                  {t.station.loginToContribute}
+                </p>
+              </div>
+            )}
 
             {/* List of comments */}
             <div className="space-y-3">
@@ -791,14 +892,21 @@ export default function StationSheet({
                       className="bg-[#18181b]/35 border border-[#27272a]/60 rounded-xl p-3 space-y-2.5 shadow-sm"
                     >
                       <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-1.5">
-                          <div className="h-5 w-5 rounded-full bg-zinc-800 flex items-center justify-center">
-                            <User size={10} className="text-[#a1a1aa]" />
+                        <button
+                          onClick={() => setAuthorProfileId(comment.author_session_id)}
+                          className="flex items-center gap-1.5 focus:outline-none hover:opacity-80 active:scale-95 transition-all text-left"
+                        >
+                          <div className="h-5 w-5 rounded-full bg-zinc-800 flex items-center justify-center overflow-hidden border border-zinc-700/60">
+                            {getAvatarFromRegistry(comment.author_session_id) ? (
+                              <img src={getAvatarFromRegistry(comment.author_session_id) || ""} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <User size={10} className="text-[#a1a1aa]" />
+                            )}
                           </div>
-                          <span className={`text-[11px] font-bold ${isAuthor ? "text-blue-400" : "text-[#f4f4f5]"}`}>
-                            {comment.author_name} {isAuthor && (language === "ru" ? "(Вы)" : "(You)")}
+                          <span className={`text-[11px] font-bold hover:underline ${isAuthor ? "text-blue-400" : "text-[#f4f4f5]"}`}>
+                            {comment.author_name} {isAuthor && t.common.you}
                           </span>
-                        </div>
+                        </button>
 
                         <div className="flex items-center gap-2">
                           <span className="text-[9px] text-[#71717a]">{dateStr}</span>
@@ -866,6 +974,14 @@ export default function StationSheet({
           </div>
         )}
       </div>
+
+      {authorProfileId && (
+        <AuthorProfileModal
+          sessionId={authorProfileId}
+          onClose={() => setAuthorProfileId(null)}
+          language={language}
+        />
+      )}
     </div>
   </div>
   );

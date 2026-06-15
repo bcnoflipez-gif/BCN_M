@@ -1,4 +1,4 @@
-export type ReportType = "gossos" | "mosquits" | "pregunta" | "gorilles" | "lliure" | "delay" | "crowd" | "security" | "other";
+export type ReportType = "gossos" | "pregunta" | "gorilles" | "lliure" | "delay" | "closed" | "other";
 
 export interface StationReport {
   id: string;
@@ -36,6 +36,8 @@ export interface UserFavorite {
 
 export type Language = "ru" | "en" | "es" | "fr";
 
+export type ProfileReactionType = "heart" | "like" | "dislike";
+
 export interface UserProfile {
   username: string;
   device_session_id: string;
@@ -46,6 +48,27 @@ export interface UserProfile {
   email?: string;
   is_logged_in?: boolean;
   role?: "user" | "admin";
+  // Public profile fields
+  avatar_url?: string;
+  bio?: string;
+  social_instagram?: string;
+  social_telegram?: string;
+  social_twitter?: string;
+  flags_received?: number;
+}
+
+export interface UserProfileCard {
+  device_session_id: string;
+  username: string;
+  created_at: string;
+  reports_count: number;
+  comments_count: number;
+  flags_received?: number;
+  avatar_url?: string;
+  bio?: string;
+  social_instagram?: string;
+  social_telegram?: string;
+  social_twitter?: string;
 }
 
 export interface StationOverride {

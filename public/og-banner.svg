@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <radialGradient id="bg" cx="30%" cy="50%" r="80%">
+      <stop offset="0%" stop-color="#0f1124"/>
+      <stop offset="100%" stop-color="#09090b"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Grid lines subtle background -->
+  <g stroke="#1e2035" stroke-width="1" opacity="0.6">
+    <line x1="0" y1="105" x2="1200" y2="105"/>
+    <line x1="0" y1="210" x2="1200" y2="210"/>
+    <line x1="0" y1="315" x2="1200" y2="315"/>
+    <line x1="0" y1="420" x2="1200" y2="420"/>
+    <line x1="0" y1="525" x2="1200" y2="525"/>
+    <line x1="200" y1="0" x2="200" y2="630"/>
+    <line x1="400" y1="0" x2="400" y2="630"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="800" y1="0" x2="800" y2="630"/>
+    <line x1="1000" y1="0" x2="1000" y2="630"/>
+  </g>
+
+  <!-- Blue glow behind globe -->
+  <ellipse cx="300" cy="315" rx="280" ry="280" fill="url(#glow)"/>
+
+  <!-- Globe wireframe centered at 300,315 r=220 -->
+  <g fill="none" stroke="#c7d9ff" stroke-width="2.4" opacity="0.85">
+    <circle cx="300" cy="315" r="220"/>
+    <!-- latitude -->
+    <ellipse cx="300" cy="315" rx="220" ry="58"/>
+    <ellipse cx="300" cy="315" rx="220" ry="126"/>
+    <ellipse cx="300" cy="315" rx="220" ry="185"/>
+    <!-- longitude meridians -->
+    <line x1="300" y1="95" x2="300" y2="535"/>
+    <path d="M300 95 Q380 205 380 315 Q380 425 300 535"/>
+    <path d="M300 95 Q220 205 220 315 Q220 425 300 535"/>
+    <path d="M300 95 Q450 200 450 315 Q450 430 300 535"/>
+    <path d="M300 95 Q150 200 150 315 Q150 430 300 535"/>
+    <path d="M300 95 Q500 210 500 315 Q500 420 300 535" opacity="0.35"/>
+    <path d="M300 95 Q100 210 100 315 Q100 420 300 535" opacity="0.35"/>
+    <!-- swirl accent -->
+    <path d="M120 200 Q240 160 300 95 Q360 160 420 210 Q490 268 490 315" opacity="0.5" stroke="#60a5fa" stroke-width="2.2"/>
+    <path d="M80 315 Q112 210 200 155 Q300 110 400 155 Q488 210 520 315" opacity="0.3" stroke="#60a5fa"/>
+  </g>
+
+  <!-- Right side text content -->
+  <!-- BCN METRO big -->
+  <text x="680" y="290"
+    font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+    font-size="92" font-weight="900" letter-spacing="4"
+    fill="#ffffff">BCN METRO</text>
+
+  <!-- LIVE pill -->
+  <rect x="682" y="316" width="90" height="32" rx="8" fill="#3b82f6" opacity="0.9"/>
+  <text x="727" y="338"
+    font-family="Arial, sans-serif"
+    font-size="15" font-weight="800" letter-spacing="3"
+    text-anchor="middle" fill="#ffffff">LIVE</text>
+
+  <!-- Subtitle -->
+  <text x="682" y="390"
+    font-family="'Helvetica Neue', Arial, sans-serif"
+    font-size="28" font-weight="400" letter-spacing="0.5"
+    fill="#94a3b8">Real-time Barcelona Metro tracker</text>
+
+  <!-- Tags row -->
+  <g font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#475569">
+    <text x="682" y="440">🚇 Ticket inspections · ⏳ Delays · 💬 Live comments</text>
+  </g>
+
+  <!-- Bottom accent line -->
+  <line x1="682" y1="455" x2="1150" y2="455" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+
+  <!-- URL -->
+  <text x="682" y="490"
+    font-family="'Helvetica Neue', Arial, sans-serif"
+    font-size="18" fill="#334155" letter-spacing="0.5">bcn-metro-live.vercel.app</text>
+</svg>

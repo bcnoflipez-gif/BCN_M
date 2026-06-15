@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { Search, ShieldAlert, Clock, Accessibility, Heart, SlidersHorizontal } from "lucide-react";
+import React, { useState, useMemo, useCallback, useEffect, memo } from "react";
+import { Search, ShieldAlert, Clock, Accessibility, Heart, SlidersHorizontal, Lock } from "lucide-react";
 import { STATIONS, METRO_LINES } from "../../lib/metroData";
 import { TRANSLATIONS } from "../../lib/translations";
 import { StationReport, Language } from "../../types";
@@ -11,17 +11,27 @@ interface ListViewProps {
   activeReports: StationReport[];
   onSelectStation: (stationId: string) => void;
   language: Language;
+  favoriteIds: string[];
+  onToggleFavorite: (stationId: string) => void;
 }
 
-type AlertFilter = "all" | "lliure" | "gossos" | "mosquits" | "pregunta" | "gorilles" | "delay" | "crowd" | "security";
+type AlertFilter = "all" | "lliure" | "gossos" | "pregunta" | "gorilles" | "delay" | "closed";
 
 const METRO_LINE_IDS = Object.keys(METRO_LINES).filter(id => METRO_LINES[id].type === "metro");
 const RODALIES_LINE_IDS = Object.keys(METRO_LINES).filter(id => METRO_LINES[id].type === "rodalies");
 
+// ─── Debounce hook ───────────────────────────────────────────────────────────
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
 
-
-/** Alert type checkbox row */
-function AlertChip({
+/** Alert chip button */
+const AlertChip = memo(function AlertChip({
   isActive,
   onClick,
   label,
@@ -49,30 +59,148 @@ function AlertChip({
       {label}
     </button>
   );
-}
+});
 
 // ─── Colored line stripe helper ───────────────────────────────────────────────
-
-function LineStripes({ lineIds }: { lineIds: string[] }) {
+const LineStripes = memo(function LineStripes({ lineIds }: { lineIds: string[] }) {
   const lines = lineIds.map(id => METRO_LINES[id]).filter(Boolean);
   if (lines.length === 0) return null;
   return (
     <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl overflow-hidden flex flex-col">
       {lines.map((line, i) => (
-        <div
-          key={i}
-          className="flex-1"
-          style={{ backgroundColor: line.color }}
-        />
+        <div key={i} className="flex-1" style={{ backgroundColor: line.color }} />
       ))}
     </div>
   );
+});
+
+// ─── Memoized Station Row ─────────────────────────────────────────────────────
+interface StationRowProps {
+  station: typeof STATIONS[0];
+  stationAlerts: StationReport[];
+  isFavorite: boolean;
+  onSelect: () => void;
+  onToggleFavorite: (e: React.MouseEvent) => void;
+  alertAll: string;
+  alertLliure: string;
+  alertDelay: string;
+  alertClosed: string;
+  activeAlerts: string;
+  accessibilityLabel: string;
 }
+
+const StationRow = memo(function StationRow({
+  station,
+  stationAlerts,
+  isFavorite,
+  onSelect,
+  onToggleFavorite,
+  alertLliure,
+  alertDelay,
+  alertClosed,
+  activeAlerts,
+  accessibilityLabel,
+}: StationRowProps) {
+  const hasAlert = stationAlerts.length > 0;
+  const isLliure = stationAlerts.some(a => a.type === "lliure");
+  const isDanger = stationAlerts.some(a => ["gossos", "gorilles", "closed"].includes(a.type));
+
+  let alertLabel: string | null = null;
+  let alertColorClass = "text-amber-400 bg-amber-950/20 border-amber-500/20";
+  let AlertIcon: typeof ShieldAlert = ShieldAlert;
+
+  if (hasAlert) {
+    if (isLliure) {
+      alertLabel = alertLliure;
+      alertColorClass = "text-emerald-400 bg-emerald-950/20 border-emerald-500/20";
+    } else if (stationAlerts.some(a => a.type === "closed")) {
+      alertLabel = alertClosed;
+      alertColorClass = "text-red-400 bg-red-950/20 border-red-500/20";
+      AlertIcon = Lock;
+    } else if (isDanger) {
+      alertLabel = activeAlerts;
+      alertColorClass = "text-red-400 bg-red-950/20 border-red-500/20";
+    } else if (stationAlerts.some(a => a.type === "delay")) {
+      alertLabel = alertDelay;
+      AlertIcon = Clock;
+    } else {
+      alertLabel = activeAlerts;
+    }
+  }
+
+  const outerBorder = hasAlert
+    ? isLliure ? "border-emerald-500/20 bg-emerald-950/5" : "border-red-500/20 bg-red-950/5"
+    : "border-[#27272a]/60";
+
+  return (
+    <div
+      onClick={onSelect}
+      className={`relative glass-card rounded-xl pl-4 pr-3.5 py-3.5 flex items-center justify-between border cursor-pointer active:scale-[0.98] transition-all overflow-hidden ${outerBorder}`}
+    >
+      <LineStripes lineIds={station.lines} />
+
+      <div className="space-y-1.5 flex-1 pr-3">
+        <div className="flex items-center gap-1.5">
+          <h3 className="font-extrabold text-sm text-white tracking-tight">{station.name}</h3>
+          {station.generalInfo.accessibility && (
+            <span title={accessibilityLabel}>
+              <Accessibility size={12} className="text-blue-400" />
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1">
+          {station.lines.map(lineId => {
+            const line = METRO_LINES[lineId];
+            return (
+              <span
+                key={lineId}
+                className="px-1.5 py-0.5 rounded text-[8px] font-extrabold shadow-sm"
+                style={{ backgroundColor: line?.color ?? "#52525b", color: line?.textColor ?? "#fff" }}
+              >
+                {line?.name ?? lineId}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {alertLabel && (
+          <div className={`flex items-center gap-1 border px-2 py-0.5 rounded-full text-[10px] font-bold ${alertColorClass}`}>
+            <AlertIcon size={12} className="flex-shrink-0" />
+            <span>{alertLabel}</span>
+          </div>
+        )}
+        <button
+          onClick={onToggleFavorite}
+          className="h-8 w-8 rounded-lg bg-[#18181b] flex items-center justify-center border border-[#27272a] flex-shrink-0 active:scale-90 transition-all duration-150"
+          aria-label="Add to favorites"
+        >
+          <Heart
+            size={15}
+            className={`transition-all duration-200 ${
+              isFavorite ? "fill-red-500 text-red-500 scale-110" : "text-zinc-500"
+            }`}
+          />
+        </button>
+      </div>
+    </div>
+  );
+});
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function ListView({ activeReports, onSelectStation, language }: ListViewProps) {
+export default function ListView({
+  activeReports,
+  onSelectStation,
+  language,
+  favoriteIds,
+  onToggleFavorite,
+}: ListViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 150); // 150ms debounce
+
   const [selectedWarnings, setSelectedWarnings] = useState<string[]>([]);
   const [showMetro, setShowMetro] = useState(true);
   const [showRodalies, setShowRodalies] = useState(true);
@@ -83,43 +211,71 @@ export default function ListView({ activeReports, onSelectStation, language }: L
   const t = TRANSLATIONS[language];
   const tl = t.list;
 
-  const selectedSystems = useMemo(() => {
-    return [showMetro && "metro", showRodalies && "rodalies"].filter(Boolean) as string[];
-  }, [showMetro, showRodalies]);
+  // ── Stable callbacks (useCallback prevents child re-renders) ────────────────
 
-  const handleToggleSystem = (system: string) => {
-    if (system === "metro") {
-      setShowMetro(prev => !prev);
-    } else if (system === "rodalies") {
-      setShowRodalies(prev => !prev);
-    }
-  };
+  const handleToggleSystem = useCallback((system: string) => {
+    if (system === "metro") setShowMetro(prev => !prev);
+    else if (system === "rodalies") setShowRodalies(prev => !prev);
+  }, []);
 
-  const selectedLinesCombined = useMemo(() => {
-    return [...selectedMetroLines, ...selectedRodaliesLines];
-  }, [selectedMetroLines, selectedRodaliesLines]);
-
-  const handleToggleLine = (lineId: string) => {
+  const handleToggleLine = useCallback((lineId: string) => {
     const isMetro = METRO_LINE_IDS.includes(lineId);
-    toggleLine(lineId, isMetro);
-  };
+    if (isMetro) {
+      setSelectedMetroLines(prev => prev.includes(lineId) ? prev.filter(id => id !== lineId) : [...prev, lineId]);
+    } else {
+      setSelectedRodaliesLines(prev => prev.includes(lineId) ? prev.filter(id => id !== lineId) : [...prev, lineId]);
+    }
+  }, []);
 
-  const handleToggleAllLines = (lineIds: string[], selectAll: boolean) => {
+  const handleToggleAllLines = useCallback((lineIds: string[], selectAll: boolean) => {
     const isMetro = lineIds.some(id => METRO_LINE_IDS.includes(id));
     if (isMetro) {
       setSelectedMetroLines(selectAll ? METRO_LINE_IDS : []);
     } else {
       setSelectedRodaliesLines(selectAll ? RODALIES_LINE_IDS : []);
     }
-  };
+  }, []);
 
-  const handleToggleWarning = (warningId: string) => {
+  const handleToggleWarning = useCallback((warningId: string) => {
     setSelectedWarnings(prev =>
       prev.includes(warningId) ? prev.filter(w => w !== warningId) : [...prev, warningId]
     );
-  };
+  }, []);
 
-  // Number of non-default active filters
+  const handleToggleFavoriteClick = useCallback((stationId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleFavorite(stationId);
+  }, [onToggleFavorite]);
+
+  const resetFilters = useCallback(() => {
+    setSelectedWarnings([]);
+    setShowMetro(true);
+    setShowRodalies(true);
+    setSelectedMetroLines(METRO_LINE_IDS);
+    setSelectedRodaliesLines(RODALIES_LINE_IDS);
+  }, []);
+
+  // ── Derived state ────────────────────────────────────────────────────────────
+
+  const selectedSystems = useMemo(() => {
+    return [showMetro && "metro", showRodalies && "rodalies"].filter(Boolean) as string[];
+  }, [showMetro, showRodalies]);
+
+  const selectedLinesCombined = useMemo(() => {
+    return [...selectedMetroLines, ...selectedRodaliesLines];
+  }, [selectedMetroLines, selectedRodaliesLines]);
+
+  // Build a quick lookup map for reports per station — O(n) instead of O(n²) inside filter
+  const reportsByStation = useMemo(() => {
+    const map = new Map<string, StationReport[]>();
+    activeReports.forEach(r => {
+      const arr = map.get(r.station_id) || [];
+      arr.push(r);
+      map.set(r.station_id, arr);
+    });
+    return map;
+  }, [activeReports]);
+
   const activeFilterCount = [
     selectedWarnings.length > 0,
     !showMetro,
@@ -128,68 +284,26 @@ export default function ListView({ activeReports, onSelectStation, language }: L
     selectedRodaliesLines.length < RODALIES_LINE_IDS.length,
   ].filter(Boolean).length;
 
-  const alertChips: { id: AlertFilter; label: string; color: string }[] = [
+  const alertChips: { id: AlertFilter; label: string; color: string }[] = useMemo(() => [
     { id: "all",      label: tl.alertAll,      color: "blue"    },
     { id: "lliure",   label: tl.alertLliure,   color: "emerald" },
     { id: "gossos",   label: tl.alertGossos,   color: "red"     },
-    { id: "mosquits", label: tl.alertMosquits, color: "red"     },
     { id: "pregunta", label: tl.alertPregunta, color: "amber"   },
     { id: "gorilles", label: tl.alertGorilles, color: "red"     },
     { id: "delay",    label: tl.alertDelay,    color: "amber"   },
-    { id: "crowd",    label: tl.alertCrowd,    color: "cyan"    },
-    { id: "security", label: tl.alertSecurity, color: "purple"  },
-  ];
-
-  const toggleLine = (lineId: string, isMetro: boolean) => {
-    if (isMetro) {
-      setSelectedMetroLines(prev => prev.includes(lineId) ? prev.filter(id => id !== lineId) : [...prev, lineId]);
-    } else {
-      setSelectedRodaliesLines(prev => prev.includes(lineId) ? prev.filter(id => id !== lineId) : [...prev, lineId]);
-    }
-  };
-
-  // Favorites state — persisted in localStorage
-  const [favorites, setFavorites] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    try {
-      const stored = localStorage.getItem("bcn_favorites");
-      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-
-  const toggleFavorite = (stationId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFavorites(prev => {
-      const next = new Set(prev);
-      if (next.has(stationId)) {
-        next.delete(stationId);
-      } else {
-        next.add(stationId);
-      }
-      localStorage.setItem("bcn_favorites", JSON.stringify([...next]));
-      return next;
-    });
-  };
-
-  const resetFilters = () => {
-    setSelectedWarnings([]);
-    setShowMetro(true);
-    setShowRodalies(true);
-    setSelectedMetroLines(METRO_LINE_IDS);
-    setSelectedRodaliesLines(RODALIES_LINE_IDS);
-  };
+    { id: "closed",   label: tl.alertClosed,   color: "red"     },
+  ], [tl]);
 
   const baseFiltered = useMemo(() => {
     return STATIONS.filter(station => {
-      if (searchQuery && !station.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (debouncedSearch && !station.name.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
       if (selectedWarnings.length > 0) {
-        if (!activeReports.some(r => r.station_id === station.id && selectedWarnings.includes(r.type))) return false;
+        const reports = reportsByStation.get(station.id) || [];
+        if (!reports.some(r => selectedWarnings.includes(r.type))) return false;
       }
       return true;
     });
-  }, [searchQuery, selectedWarnings, activeReports]);
+  }, [debouncedSearch, selectedWarnings, reportsByStation]); // uses debouncedSearch
 
   const metroStations = useMemo(() => {
     if (!showMetro) return [];
@@ -207,95 +321,9 @@ export default function ListView({ activeReports, onSelectStation, language }: L
     });
   }, [baseFiltered, showRodalies, selectedRodaliesLines]);
 
-  const renderStation = (station: typeof STATIONS[0]) => {
-    const stationAlerts = activeReports.filter(r => r.station_id === station.id);
-    const hasAlert = stationAlerts.length > 0;
-    const isLliure = stationAlerts.some(a => a.type === "lliure");
-    const isDanger = stationAlerts.some(a => ["gossos", "mosquits", "gorilles", "security"].includes(a.type));
-
-    let alertLabel: string | null = null;
-    let alertColorClass = "text-amber-400 bg-amber-950/20 border-amber-500/20";
-    let AlertIcon: typeof ShieldAlert = ShieldAlert;
-
-    if (hasAlert) {
-      if (isLliure) {
-        alertLabel = tl.alertLliure;
-        alertColorClass = "text-emerald-400 bg-emerald-950/20 border-emerald-500/20";
-      } else if (isDanger) {
-        alertLabel = t.station.activeAlerts;
-        alertColorClass = "text-red-400 bg-red-950/20 border-red-500/20";
-      } else if (stationAlerts.some(a => a.type === "delay")) {
-        alertLabel = tl.alertDelay;
-        AlertIcon = Clock;
-      } else {
-        alertLabel = t.station.activeAlerts;
-      }
-    }
-
-    const outerBorder = hasAlert
-      ? isLliure ? "border-emerald-500/20 bg-emerald-950/5" : "border-red-500/20 bg-red-950/5"
-      : "border-[#27272a]/60";
-
-    return (
-      <div
-        key={station.id}
-        onClick={() => onSelectStation(station.id)}
-        className={`relative glass-card rounded-xl pl-4 pr-3.5 py-3.5 flex items-center justify-between border cursor-pointer active:scale-[0.98] transition-all overflow-hidden ${outerBorder}`}
-      >
-        {/* Colored line stripe on left edge */}
-        <LineStripes lineIds={station.lines} />
-
-        <div className="space-y-1.5 flex-1 pr-3">
-          <div className="flex items-center gap-1.5">
-            <h3 className="font-extrabold text-sm text-white tracking-tight">{station.name}</h3>
-            {station.generalInfo.accessibility && (
-              <span title={t.common.yes}><Accessibility size={12} className="text-blue-400" /></span>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-1">
-            {station.lines.map(lineId => {
-              const line = METRO_LINES[lineId];
-              return (
-                <span
-                  key={lineId}
-                  className="px-1.5 py-0.5 rounded text-[8px] font-extrabold shadow-sm"
-                  style={{ backgroundColor: line?.color ?? "#52525b", color: line?.textColor ?? "#fff" }}
-                >
-                  {line?.name ?? lineId}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {alertLabel && (
-            <div className={`flex items-center gap-1 border px-2 py-0.5 rounded-full text-[10px] font-bold ${alertColorClass}`}>
-              <AlertIcon size={12} className="flex-shrink-0" />
-              <span>{alertLabel}</span>
-            </div>
-          )}
-          <button
-            onClick={(e) => toggleFavorite(station.id, e)}
-            className="h-8 w-8 rounded-lg bg-[#18181b] flex items-center justify-center border border-[#27272a] flex-shrink-0 active:scale-90 transition-all duration-150"
-            aria-label="Добавить в избранное"
-          >
-            <Heart
-              size={15}
-              className={`transition-all duration-200 ${
-                favorites.has(station.id)
-                  ? "fill-red-500 text-red-500 scale-110"
-                  : "text-zinc-500"
-              }`}
-            />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   const totalVisible = metroStations.length + rodaliesStations.length;
+
+
 
   return (
     <div className="flex-1 flex flex-col pb-20 overflow-hidden">
@@ -326,7 +354,7 @@ export default function ListView({ activeReports, onSelectStation, language }: L
         </button>
       </div>
 
-      {/* ─── Alert type chips (always visible) ─── */}
+      {/* ─── Alert type chips ─── */}
       <div className="px-4 pb-3 flex-shrink-0">
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
           {alertChips.map(chip => (
@@ -334,11 +362,8 @@ export default function ListView({ activeReports, onSelectStation, language }: L
               key={chip.id}
               isActive={chip.id === "all" ? selectedWarnings.length === 0 : selectedWarnings.includes(chip.id)}
               onClick={() => {
-                if (chip.id === "all") {
-                  setSelectedWarnings([]);
-                } else {
-                  setSelectedWarnings([chip.id]);
-                }
+                if (chip.id === "all") setSelectedWarnings([]);
+                else setSelectedWarnings([chip.id]);
               }}
               label={chip.label}
               color={chip.color}
@@ -357,7 +382,24 @@ export default function ListView({ activeReports, onSelectStation, language }: L
               <span className="text-[10px] text-zinc-600">{metroStations.length}</span>
             </div>
             {metroStations.length > 0
-              ? <div className="space-y-2.5">{metroStations.map(renderStation)}</div>
+              ? <div className="space-y-2.5">
+                  {metroStations.map(station => (
+                    <StationRow
+                      key={station.id}
+                      station={station}
+                      stationAlerts={reportsByStation.get(station.id) || []}
+                      isFavorite={favoriteIds.includes(station.id)}
+                      onSelect={() => onSelectStation(station.id)}
+                      onToggleFavorite={(e) => handleToggleFavoriteClick(station.id, e)}
+                      alertAll={tl.alertAll}
+                      alertLliure={tl.alertLliure}
+                      alertDelay={tl.alertDelay}
+                      alertClosed={tl.alertClosed}
+                      activeAlerts={t.station.activeAlerts}
+                      accessibilityLabel={t.common.yes}
+                    />
+                  ))}
+                </div>
               : <div className="text-center py-6 text-xs text-zinc-600">{t.common.empty}</div>
             }
           </div>
@@ -370,7 +412,24 @@ export default function ListView({ activeReports, onSelectStation, language }: L
               <span className="text-[10px] text-zinc-600">{rodaliesStations.length}</span>
             </div>
             {rodaliesStations.length > 0
-              ? <div className="space-y-2.5">{rodaliesStations.map(renderStation)}</div>
+              ? <div className="space-y-2.5">
+                  {rodaliesStations.map(station => (
+                    <StationRow
+                      key={station.id}
+                      station={station}
+                      stationAlerts={reportsByStation.get(station.id) || []}
+                      isFavorite={favoriteIds.includes(station.id)}
+                      onSelect={() => onSelectStation(station.id)}
+                      onToggleFavorite={(e) => handleToggleFavoriteClick(station.id, e)}
+                      alertAll={tl.alertAll}
+                      alertLliure={tl.alertLliure}
+                      alertDelay={tl.alertDelay}
+                      alertClosed={tl.alertClosed}
+                      activeAlerts={t.station.activeAlerts}
+                      accessibilityLabel={t.common.yes}
+                    />
+                  ))}
+                </div>
               : <div className="text-center py-6 text-xs text-zinc-600">{t.common.empty}</div>
             }
           </div>
@@ -398,4 +457,3 @@ export default function ListView({ activeReports, onSelectStation, language }: L
     </div>
   );
 }
-
