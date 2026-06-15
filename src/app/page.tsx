@@ -290,7 +290,7 @@ export default function Home() {
           {userRole === "admin" && (
             <button
               onClick={() => setIsSimOpen(true)}
-              className="absolute bottom-20 right-4 z-[900] h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center active:scale-90 transition-transform border border-blue-500/30"
+              className="absolute bottom-[calc(env(safe-area-inset-bottom,0px)+4.5rem)] right-4 z-[900] h-12 w-12 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center active:scale-90 transition-transform border border-blue-500/30"
               title="Simulate Telegram Message"
             >
               <Send size={18} />

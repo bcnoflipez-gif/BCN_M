@@ -55,6 +55,9 @@ export interface UserProfile {
   social_telegram?: string;
   social_twitter?: string;
   flags_received?: number;
+  reactions_heart?: number;
+  reactions_like?: number;
+  reactions_dislike?: number;
 }
 
 export interface UserProfileCard {
@@ -69,6 +72,9 @@ export interface UserProfileCard {
   social_instagram?: string;
   social_telegram?: string;
   social_twitter?: string;
+  reactions_heart?: number;
+  reactions_like?: number;
+  reactions_dislike?: number;
 }
 
 export interface StationOverride {

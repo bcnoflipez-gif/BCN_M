@@ -41,6 +41,9 @@ export function getOrCreateProfile(): UserProfile {
       comments_count: 0,
       language: "ru",
       role: "user",
+      reactions_heart: 0,
+      reactions_like: 0,
+      reactions_dislike: 0,
     };
   }
 
@@ -80,6 +83,9 @@ export function getOrCreateProfile(): UserProfile {
     comments_count: 0,
     language: "ru",
     role: "user",
+    reactions_heart: 0,
+    reactions_like: 0,
+    reactions_dislike: 0,
   };
   localStorage.setItem(KEYS.PROFILE, JSON.stringify(newProfile));
   return newProfile;
@@ -103,6 +109,9 @@ function updateUserRegistry(profile: UserProfile): void {
       social_instagram: profile.social_instagram,
       social_telegram: profile.social_telegram,
       social_twitter: profile.social_twitter,
+      reactions_heart: profile.reactions_heart || 0,
+      reactions_like: profile.reactions_like || 0,
+      reactions_dislike: profile.reactions_dislike || 0,
     };
     localStorage.setItem(USER_REGISTRY_KEY, JSON.stringify(registry));
   } catch { /* noop */ }
@@ -988,6 +997,9 @@ export const profileService = {
             social_instagram: data.social_instagram,
             social_telegram: data.social_telegram,
             social_twitter: data.social_twitter,
+            reactions_heart: data.reactions_heart || 0,
+            reactions_like: data.reactions_like || 0,
+            reactions_dislike: data.reactions_dislike || 0,
           };
         }
       } catch (err) {
@@ -1004,14 +1016,46 @@ export const profileService = {
     return null;
   },
 
-  getProfileReactions(authorSessionId: string): { heart: number; like: number; dislike: number; myReaction: ProfileReactionType | null } {
+  async getProfileReactions(authorSessionId: string): Promise<{ heart: number; like: number; dislike: number; myReaction: ProfileReactionType | null }> {
     const mySessionId = getOrCreateProfile().device_session_id;
+    let myReaction: ProfileReactionType | null = null;
+    let heart = 0, like = 0, dislike = 0;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        // Fetch counters from profiles table
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("reactions_heart, reactions_like, reactions_dislike")
+          .eq("id", authorSessionId)
+          .single();
+        if (profileData) {
+          heart = profileData.reactions_heart || 0;
+          like = profileData.reactions_like || 0;
+          dislike = profileData.reactions_dislike || 0;
+        }
+
+        // Fetch my reaction from profile_reactions table
+        const { data: reactionData } = await supabase
+          .from("profile_reactions")
+          .select("reaction_type")
+          .eq("target_user_id", authorSessionId)
+          .eq("reactor_user_id", mySessionId)
+          .single();
+        if (reactionData) {
+          myReaction = reactionData.reaction_type as ProfileReactionType;
+        }
+        return { heart, like, dislike, myReaction };
+      } catch (err) {
+        console.warn("Supabase getProfileReactions failed, falling back to local DB", err);
+      }
+    }
+
     if (typeof window === "undefined") return { heart: 0, like: 0, dislike: 0, myReaction: null };
     try {
       const raw = localStorage.getItem("bcn_profile_reactions") || "{}";
       const all = JSON.parse(raw) as Record<string, { heart: string[]; like: string[]; dislike: string[] }>;
       const reactions = all[authorSessionId] || { heart: [], like: [], dislike: [] };
-      let myReaction: ProfileReactionType | null = null;
       if (reactions.heart.includes(mySessionId)) myReaction = "heart";
       else if (reactions.like.includes(mySessionId)) myReaction = "like";
       else if (reactions.dislike.includes(mySessionId)) myReaction = "dislike";
@@ -1021,11 +1065,30 @@ export const profileService = {
     }
   },
 
-  reactToProfile(authorSessionId: string, type: ProfileReactionType): { heart: number; like: number; dislike: number; myReaction: ProfileReactionType | null } {
+  async reactToProfile(authorSessionId: string, type: ProfileReactionType): Promise<{ heart: number; like: number; dislike: number; myReaction: ProfileReactionType | null }> {
     const mySessionId = getOrCreateProfile().device_session_id;
     if (authorSessionId === mySessionId || typeof window === "undefined") {
       return this.getProfileReactions(authorSessionId);
     }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.rpc("toggle_profile_reaction", {
+          target_user: authorSessionId,
+          reactor: mySessionId,
+          reaction: type,
+        });
+        if (!error) {
+          return this.getProfileReactions(authorSessionId);
+        } else {
+          console.warn("Supabase reactToProfile RPC failed", error);
+        }
+      } catch (err) {
+        console.warn("Supabase reactToProfile exception", err);
+      }
+    }
+
+    // Local DB fallback
     try {
       const raw = localStorage.getItem("bcn_profile_reactions") || "{}";
       const all = JSON.parse(raw) as Record<string, { heart: string[]; like: string[]; dislike: string[] }>;

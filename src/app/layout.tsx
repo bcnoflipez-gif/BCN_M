@@ -69,7 +69,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-[100dvh] antialiased`}
       suppressHydrationWarning
     >
       <head suppressHydrationWarning>
@@ -83,7 +83,7 @@ export default function RootLayout({
         {/* Theme restore — blocking inline script runs before paint without React 19 warning */}
         <ThemeScript />
       </head>
-      <body className="h-full flex flex-col overflow-hidden" suppressHydrationWarning>
+      <body className="h-[100dvh] flex flex-col overflow-hidden" suppressHydrationWarning>
         {children}
         <ServiceWorkerRegister />
       </body>

@@ -6,7 +6,7 @@ interface MobileLayoutProps {
 
 export default function MobileLayout({ children }: MobileLayoutProps) {
   return (
-    <div suppressHydrationWarning className="h-full w-full bg-black flex justify-center items-stretch font-sans antialiased select-none overflow-hidden">
+    <div suppressHydrationWarning className="h-[100dvh] w-full bg-black flex justify-center items-stretch font-sans antialiased select-none overflow-hidden">
       {/* 
         This wrapper behaves like a physical phone container on desktop, 
         but takes 100% width on actual mobile screens.

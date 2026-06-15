@@ -617,6 +617,26 @@ export default function ProfileView({ onLanguageChange, onProfileChange }: Profi
                 />
               </div>
             </div>
+
+            {/* Reactions Stats */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-1">
+                {currentLang === "ru" ? "Реакции от других" : "Reactions from others"}
+              </label>
+              <div className="flex gap-2">
+                {[
+                  { emoji: "❤️", value: profile.reactions_heart || 0 },
+                  { emoji: "👍", value: profile.reactions_like || 0 },
+                  { emoji: "👎", value: profile.reactions_dislike || 0 }
+                ].map((stat, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center justify-center p-2 rounded-xl bg-[#18181b]/50 border border-[#27272a]">
+                    <span className="text-sm mb-0.5">{stat.emoji}</span>
+                    <span className="text-sm font-extrabold text-white">{stat.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
 
           {/* Admin Control Panel */}

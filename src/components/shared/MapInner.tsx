@@ -431,7 +431,7 @@ export default function MapInner({
           }
         }}
         className={`absolute right-4 z-[900] h-12 w-12 rounded-full bg-[#09090b]/90 border border-[#1c1c1f]/80 text-[#71717a] hover:text-white shadow-lg flex items-center justify-center active:scale-90 transition-all duration-200 ${
-          isAdmin ? "bottom-40" : "bottom-24"
+          isAdmin ? "bottom-[calc(env(safe-area-inset-bottom,0px)+8.5rem)]" : "bottom-[calc(env(safe-area-inset-bottom,0px)+4.5rem)]"
         }`}
         title="Center on my location"
         aria-label="Locate me"

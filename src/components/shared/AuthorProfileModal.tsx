@@ -27,9 +27,10 @@ export default function AuthorProfileModal({ sessionId, onClose, language = "ru"
     async function load() {
       setLoading(true);
       const data = await profileService.getPublicProfile(sessionId);
+      const reactionsData = await profileService.getProfileReactions(sessionId);
       if (!cancelled) {
         setProfile(data);
-        setReactions(profileService.getProfileReactions(sessionId));
+        setReactions(reactionsData);
         setLoading(false);
       }
     }
@@ -37,9 +38,9 @@ export default function AuthorProfileModal({ sessionId, onClose, language = "ru"
     return () => { cancelled = true; };
   }, [sessionId]);
 
-  const handleReact = (type: ProfileReactionType) => {
+  const handleReact = async (type: ProfileReactionType) => {
     if (isOwnProfile) return;
-    const updated = profileService.reactToProfile(sessionId, type);
+    const updated = await profileService.reactToProfile(sessionId, type);
     setReactions(updated);
   };
 
@@ -79,7 +80,7 @@ export default function AuthorProfileModal({ sessionId, onClose, language = "ru"
             </div>
             <div>
               <h3 className="font-extrabold text-white text-sm leading-tight">
-                {loading ? "..." : (profile?.username || ru ? "Неизвестный" : "Unknown")}
+                {loading ? "..." : (profile?.username || (ru ? "Неизвестный" : "Unknown"))}
               </h3>
               {!loading && profile && (
                 <p className="text-[10px] text-zinc-500 mt-0.5">
