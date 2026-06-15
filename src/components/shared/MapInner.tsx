@@ -247,9 +247,12 @@ export default function MapInner({
         setUserLocation([position.coords.latitude, position.coords.longitude]);
       },
       (error) => {
-        console.warn("Geolocation watch error:", error);
+        // code 1 = PERMISSION_DENIED — expected if user declined, no need to warn
+        if (error.code === 1) return;
+        // code 2 = POSITION_UNAVAILABLE, code 3 = TIMEOUT — log cleanly
+        console.warn(`Geolocation error (code ${error.code}): ${error.message}`);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);

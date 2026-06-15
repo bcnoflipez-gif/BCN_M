@@ -42,6 +42,8 @@ export const METRO_LINES: Record<string, MetroLine> = {
   R4: { id: "R4", name: "R4", color: "#c2410c", textColor: "#ffffff", type: "rodalies" },
   R7: { id: "R7", name: "R7", color: "#b45309", textColor: "#ffffff", type: "rodalies" },
   R8: { id: "R8", name: "R8", color: "#78350f", textColor: "#ffffff", type: "rodalies" },
+  R5: { id: "R5", name: "R5", color: "#f39200", textColor: "#ffffff", type: "rodalies" },
+  R6: { id: "R6", name: "R6", color: "#9b2680", textColor: "#ffffff", type: "rodalies" },
 };
 
 export const STATIONS: Station[] = [

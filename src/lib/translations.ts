@@ -55,6 +55,28 @@ export interface TranslationSchema {
     gorilles: { label: string; desc: string };
     lliure: { label: string; desc: string };
   };
+  list: {
+    filters: string;
+    reset: string;
+    selectAll: string;
+    clearAll: string;
+    toggleAll: string;
+    lines: string;
+    show: string;
+    metroSystem: string;
+    rodaliesSystem: string;
+    metroStations: string;
+    rodaliesStations: string;
+    alertAll: string;
+    alertLliure: string;
+    alertGossos: string;
+    alertMosquits: string;
+    alertPregunta: string;
+    alertGorilles: string;
+    alertDelay: string;
+    alertCrowd: string;
+    alertSecurity: string;
+  };
   profile: {
     title: string;
     sub: string;
@@ -142,6 +164,28 @@ export const TRANSLATIONS: Record<Language, TranslationSchema> = {
         desc: "Станция полностью чиста. Никаких проверок билетов, охраны или задержек не обнаружено.",
       },
     },
+    list: {
+      filters: "Фильтры",
+      reset: "Сбросить",
+      selectAll: "Выбрать все",
+      clearAll: "Сбросить все",
+      toggleAll: "Все / Сбросить",
+      lines: "Линии",
+      show: "Показать",
+      metroSystem: "Метро (TMB)",
+      rodaliesSystem: "Пригородные (Rodalies)",
+      metroStations: "Станции метро",
+      rodaliesStations: "Пригородные станции",
+      alertAll: "Все",
+      alertLliure: "Чисто ✓",
+      alertGossos: "Gossos 🐕",
+      alertMosquits: "Гражданские 👤",
+      alertPregunta: "Опрос ❔",
+      alertGorilles: "Охрана 🦺",
+      alertDelay: "Задержка ⏱",
+      alertCrowd: "Толпа 👥",
+      alertSecurity: "Кражи 🚨",
+    },
     profile: {
       title: "Мой профиль",
       sub: "Управление профилем и статистика активности.",
@@ -226,6 +270,28 @@ export const TRANSLATIONS: Record<Language, TranslationSchema> = {
         label: "💚 Lliure (Clear)",
         desc: "The station is completely clear. No ticket inspectors, security, or train delays present.",
       },
+    },
+    list: {
+      filters: "Filters",
+      reset: "Reset",
+      selectAll: "Select all",
+      clearAll: "Clear all",
+      toggleAll: "All / Clear",
+      lines: "Lines",
+      show: "Show",
+      metroSystem: "Metro (TMB)",
+      rodaliesSystem: "Rodalies",
+      metroStations: "Metro Stations",
+      rodaliesStations: "Rodalies Stations",
+      alertAll: "All",
+      alertLliure: "Clear ✓",
+      alertGossos: "Gossos 🐕",
+      alertMosquits: "Plainclothes 👤",
+      alertPregunta: "Check ❔",
+      alertGorilles: "Security 🦺",
+      alertDelay: "Delay ⏱",
+      alertCrowd: "Crowd 👥",
+      alertSecurity: "Theft 🚨",
     },
     profile: {
       title: "My Profile",
@@ -312,6 +378,28 @@ export const TRANSLATIONS: Record<Language, TranslationSchema> = {
         desc: "La estación está totalmente limpia. No hay revisores, seguridad ni retrasos de trenes.",
       },
     },
+    list: {
+      filters: "Filtros",
+      reset: "Restablecer",
+      selectAll: "Seleccionar todo",
+      clearAll: "Borrar todo",
+      toggleAll: "Todo / Borrar",
+      lines: "Líneas",
+      show: "Mostrar",
+      metroSystem: "Metro (TMB)",
+      rodaliesSystem: "Rodalies",
+      metroStations: "Estaciones de metro",
+      rodaliesStations: "Estaciones Rodalies",
+      alertAll: "Todo",
+      alertLliure: "Limpio ✓",
+      alertGossos: "Gossos 🐕",
+      alertMosquits: "De paisano 👤",
+      alertPregunta: "Control ❔",
+      alertGorilles: "Seguridad 🦺",
+      alertDelay: "Retraso ⏱",
+      alertCrowd: "Muchedumbre 👥",
+      alertSecurity: "Robo 🚨",
+    },
     profile: {
       title: "Mi Perfil",
       sub: "Gestiona tu configuración y consulta estadísticas de contribución.",
@@ -396,6 +484,28 @@ export const TRANSLATIONS: Record<Language, TranslationSchema> = {
         label: "💚 Lliure (Libre)",
         desc: "La station est complètement dégagée. Pas de contrôleurs, de vigiles ni de retards de train.",
       },
+    },
+    list: {
+      filters: "Filtres",
+      reset: "Réinitialiser",
+      selectAll: "Tout sélectionner",
+      clearAll: "Tout déselectionner",
+      toggleAll: "Tout / Effacer",
+      lines: "Lignes",
+      show: "Afficher",
+      metroSystem: "Métro (TMB)",
+      rodaliesSystem: "Rodalies",
+      metroStations: "Stations de métro",
+      rodaliesStations: "Stations Rodalies",
+      alertAll: "Tout",
+      alertLliure: "Libre ✓",
+      alertGossos: "Gossos 🐕",
+      alertMosquits: "En civil 👤",
+      alertPregunta: "Contrôle ❔",
+      alertGorilles: "Sécurité 🦺",
+      alertDelay: "Retard ⏱",
+      alertCrowd: "Foule 👥",
+      alertSecurity: "Vol 🚨",
     },
     profile: {
       title: "Mon Profil",

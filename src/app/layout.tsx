@@ -71,7 +71,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <head>
+      <head suppressHydrationWarning>
         {/* PWA iOS support */}
         <link rel="apple-touch-icon" href="/icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -79,15 +79,14 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="BCN Metro" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="format-detection" content="telephone=no" />
-        {/* Theme restore */}
-        <script dangerouslySetInnerHTML={{ __html: `
-          try {
-            var t = localStorage.getItem('bcn-theme');
-            if (t) document.documentElement.setAttribute('data-theme', t);
-          } catch(e) {}
-        ` }} />
+        {/* Theme restore — blocking inline script must run before paint */}
+        {/* suppressHydrationWarning on <head> silences React's script-in-component warning */}
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('bcn-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}` }}
+        />
       </head>
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+      <body className="h-full flex flex-col overflow-hidden" suppressHydrationWarning>
         {children}
         <ServiceWorkerRegister />
       </body>

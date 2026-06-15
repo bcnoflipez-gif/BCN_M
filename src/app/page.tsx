@@ -39,6 +39,7 @@ export default function Home() {
   const [activeReports, setActiveReports] = useState<StationReport[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [language, setLanguage] = useState<Language>("ru");
+  const [isMounted, setIsMounted] = useState(false);
 
   // Smart Multi-Select Filter Panel State
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -65,6 +66,7 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLanguage(profile.language || "ru");
     setUserRole(profile.role || "user");
+    setIsMounted(true);
     
     loadReports();
     loadFavorites();
@@ -200,6 +202,16 @@ export default function Home() {
   };
 
   const currentSelectedStation = STATIONS.find(s => s.id === selectedStationId) || null;
+
+  // Prevent hydration mismatch: render a structurally-matching skeleton until client-mounted
+  // Returning null would cause a server/client tree mismatch with MobileLayout's Suspense wrapper
+  if (!isMounted) {
+    return (
+      <MobileLayout>
+        <div className="flex-1 bg-[#09090b]" />
+      </MobileLayout>
+    );
+  }
 
   return (
     <MobileLayout>
